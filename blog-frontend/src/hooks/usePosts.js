@@ -1,19 +1,20 @@
 // src/hooks/usePosts.js
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import API_BASE_URL from '../config/api';
+
 
 export const usePosts = () => {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const API_BASE_URL = 'http://localhost:3001/api';
 
   const fetchPosts = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await axios.get(`${API_BASE_URL}/posts`);
+      const response = await axios.get(`${API_BASE_URL}/api/posts`);
       setPosts(response.data);
     } catch (err) {
       setError('Failed to fetch posts');
@@ -27,7 +28,7 @@ export const usePosts = () => {
     try {
       setError(null);
       console.log('Creating post:', postData); // Debug log
-      const response = await axios.post(`${API_BASE_URL}/posts`, postData);
+      const response = await axios.post(`${API_BASE_URL}/api/posts`, postData);
       setPosts(prev => [response.data, ...prev]);
       return response.data;
     } catch (err) {
@@ -45,7 +46,7 @@ export const usePosts = () => {
     try {
       setError(null);
       console.log('Updating post:', id, postData); // Debug log
-      const response = await axios.put(`${API_BASE_URL}/posts/${id}`, postData);
+      const response = await axios.put(`${API_BASE_URL}/api/posts/${id}`, postData);
       setPosts(prev => prev.map(post => 
         post.id === parseInt(id) ? response.data : post
       ));
@@ -65,7 +66,7 @@ export const usePosts = () => {
     try {
       setError(null);
       console.log('Deleting post:', id); // Debug log
-      await axios.delete(`${API_BASE_URL}/posts/${id}`);
+      await axios.delete(`${API_BASE_URL}/api/posts/${id}`);
       setPosts(prev => prev.filter(post => post.id !== parseInt(id)));
     } catch (err) {
       console.error('Error deleting post:', err);

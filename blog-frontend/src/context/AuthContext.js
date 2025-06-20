@@ -1,6 +1,8 @@
 // src/context/AuthContext.js
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
+import API_BASE_URL from '../config/api';
+
 
 const AuthContext = createContext();
 
@@ -28,7 +30,7 @@ export const AuthProvider = ({ children }) => {
 
   const verifyToken = async () => {
     try {
-      const response = await axios.get('http://localhost:3001/api/auth/verify');
+      const response = await axios.get(`${API_BASE_URL}/api/auth/verify`);
       setUser(response.data.user);
     } catch (error) {
       console.error('Token verification failed:', error);
@@ -40,7 +42,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const response = await axios.post('http://localhost:3001/api/auth/login', {
+      const response = await axios.post(`${API_BASE_URL}/api/auth/login`, {
         email,
         password
       });
@@ -63,7 +65,7 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (username, email, password, confirmPassword) => {
     try {
-      const response = await axios.post('http://localhost:3001/api/auth/register', {
+      const response = await axios.post('`${API_BASE_URL}/api/auth/register', {
         username,
         email,
         password,

@@ -2,6 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
 import axios from 'axios';
+import API_BASE_URL from '../config/api';
 
 const WordLikeEditor = ({ formData, setFormData, onSubmit, isSubmitting, editingId, resetForm }) => {
   const [uploadProgress, setUploadProgress] = useState(false);
@@ -19,7 +20,7 @@ const WordLikeEditor = ({ formData, setFormData, onSubmit, isSubmitting, editing
 
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.post('http://localhost:3001/api/upload', formDataUpload, {
+      const response = await axios.post(`${API_BASE_URL}/api/upload`, formDataUpload, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
@@ -252,7 +253,7 @@ const WordLikeEditor = ({ formData, setFormData, onSubmit, isSubmitting, editing
                       formDataUpload.append('files', blobInfo.blob(), blobInfo.filename());
                       
                       const token = localStorage.getItem('token');
-                      const response = await axios.post('http://localhost:3001/api/upload', formDataUpload, {
+                      const response = await axios.post(`${API_BASE_URL}/api/upload`, formDataUpload, {
                         headers: {
                           'Authorization': `Bearer ${token}`,
                           'Content-Type': 'multipart/form-data'

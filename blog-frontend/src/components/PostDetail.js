@@ -6,6 +6,8 @@ import QalamLogo from './QalamLogo';
 import axios from 'axios';
 import LoadingSpinner from './LoadingSpinner';
 import ErrorMessage from './ErrorMessage';
+import API_BASE_URL from '../config/api';
+
 
 // Enhanced content renderer for TinyMCE HTML content
 const renderContent = (content) => {
@@ -66,12 +68,12 @@ const PostDetail = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await axios.get(`http://localhost:3001/api/posts/${id}`);
+      const response = await axios.get(`${API_BASE_URL}/api/posts/${id}`);
       setPost(response.data);
       
       if (isAuthenticated) {
         try {
-          const likeResponse = await axios.get(`http://localhost:3001/api/posts/${id}/liked`);
+          const likeResponse = await axios.get(`${API_BASE_URL}/api/posts/${id}liked`);
           setHasLiked(likeResponse.data.hasLiked);
         } catch (likeError) {
           console.error('Error checking like status:', likeError);
@@ -99,11 +101,11 @@ const PostDetail = () => {
     setIsLiking(true);
     try {
       if (hasLiked) {
-        const response = await axios.delete(`http://localhost:3001/api/posts/${id}/like`);
+        const response = await axios.delete(`${API_BASE_URL}/api/posts/${id}/like`);
         setPost(prev => ({ ...prev, likesCount: response.data.likesCount }));
         setHasLiked(false);
       } else {
-        const response = await axios.post(`http://localhost:3001/api/posts/${id}/like`);
+        const response = await axios.post(`${API_BASE_URL}/api/posts/${id}/like`);
         setPost(prev => ({ ...prev, likesCount: response.data.likesCount }));
         setHasLiked(true);
       }
@@ -122,7 +124,7 @@ const PostDetail = () => {
     
     setIsSharing(true);
     try {
-      const response = await axios.post(`http://localhost:3001/api/posts/${id}/share`);
+      const response = await axios.post(`${API_BASE_URL}/api/posts/${id}/share`);
       setPost(prev => ({ ...prev, shares: response.data.shares }));
       
       const postUrl = `${window.location.origin}/post/${id}`;

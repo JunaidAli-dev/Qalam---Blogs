@@ -7,6 +7,8 @@ import ErrorMessage from './ErrorMessage';
 import WordLikeEditor from './WordLikeEditor';
 import QalamLogo from './QalamLogo';
 import axios from 'axios';
+import API_BASE_URL from '../config/api';
+
 
 const AdminPanel = () => {
   const { posts, loading, error, createPost, updatePost, deletePost, fetchPosts } = usePosts();
@@ -48,7 +50,7 @@ const AdminPanel = () => {
       const detailedPostsData = await Promise.all(
         posts.map(async (post) => {
           try {
-            const response = await axios.get(`http://localhost:3001/api/posts/${post.id}`);
+            const response = await axios.get(`${API_BASE_URL}/api/posts/${post.id}`);
             return {
               ...post,
               likesCount: response.data.likesCount || 0,

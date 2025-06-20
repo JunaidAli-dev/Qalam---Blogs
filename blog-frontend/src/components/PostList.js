@@ -7,6 +7,8 @@ import LoadingSpinner from './LoadingSpinner';
 import ErrorMessage from './ErrorMessage';
 import QalamLogo from './QalamLogo';
 import axios from 'axios';
+import API_BASE_URL from '../config/api';
+
 
 // Helper function to format dates safely
 const formatDate = (dateString) => {
@@ -81,7 +83,7 @@ const PostCard = ({ post }) => {
 
   const checkLikeStatus = async () => {
     try {
-      const response = await axios.get(`http://localhost:3001/api/posts/${post.id}/liked`);
+      const response = await axios.get(`${API_BASE_URL}/api/posts/${post.id}/liked`);
       setHasLiked(response.data.hasLiked);
       setLikes(response.data.likesCount);
     } catch (error) {
@@ -100,11 +102,11 @@ const PostCard = ({ post }) => {
     setIsLiking(true);
     try {
       if (hasLiked) {
-        const response = await axios.delete(`http://localhost:3001/api/posts/${post.id}/like`);
+        const response = await axios.delete(`${API_BASE_URL}/api/posts/${post.id}/like`);
         setLikes(response.data.likesCount);
         setHasLiked(false);
       } else {
-        const response = await axios.post(`http://localhost:3001/api/posts/${post.id}/like`);
+        const response = await axios.post(`${API_BASE_URL}/api/posts/${post.id}/like`);
         setLikes(response.data.likesCount);
         setHasLiked(true);
       }
@@ -123,7 +125,7 @@ const PostCard = ({ post }) => {
     
     setIsSharing(true);
     try {
-      const response = await axios.post(`http://localhost:3001/api/posts/${post.id}/share`);
+      const response = await axios.post(`${API_BASE_URL}/api/posts/${post.id}/share`);
       setShares(response.data.shares);
       
       const postUrl = `${window.location.origin}/post/${post.id}`;
