@@ -1,0 +1,166 @@
+/* src/styles/editor.css */
+
+/* Quill Editor Customizations */
+.ql-editor {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  color: #374151;
+}
+
+.ql-editor h1 {
+  font-size: 2.25rem;
+  font-weight: 700;
+  margin: 1.5rem 0 1rem 0;
+  color: #111827;
+}
+
+.ql-editor h2 {
+  font-size: 1.875rem;
+  font-weight: 600;
+  margin: 1.25rem 0 0.75rem 0;
+  color: #111827;
+}
+
+.ql-editor h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 1rem 0 0.5rem 0;
+  color: #111827;
+}
+
+.ql-editor blockquote {
+  border-left: 4px solid #3B82F6;
+  padding-left: 1rem;
+  margin: 1rem 0;
+  font-style: italic;
+  color: #6B7280;
+  background-color: #F8FAFC;
+  padding: 1rem;
+  border-radius: 0.375rem;
+}
+
+.ql-editor code {
+  background-color: #F3F4F6;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+  font-family: 'Monaco', 'Consolas', monospace;
+  font-size: 0.875rem;
+}
+
+.ql-editor pre {
+  background-color: #1F2937;
+  color: #F9FAFB;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.ql-editor img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  margin: 1rem 0;
+}
+
+.ql-editor table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1rem 0;
+  border: 1px solid #E5E7EB;
+  border-radius: 0.375rem;
+  overflow: hidden;
+}
+
+.ql-editor table td,
+.ql-editor table th {
+  border: 1px solid #E5E7EB;
+  padding: 0.75rem;
+  text-align: left;
+}
+
+.ql-editor table th {
+  background-color: #F9FAFB;
+  font-weight: 600;
+  color: #374151;
+}
+
+.ql-editor table tr:nth-child(even) {
+  background-color: #F9FAFB;
+}
+
+/* Image resize handles */
+.ql-editor .ql-image-resize-module {
+  border: 2px solid #3B82F6;
+}
+
+.ql-editor .ql-image-resize-module .ql-resize-handle {
+  background-color: #3B82F6;
+  border: 1px solid #ffffff;
+  border-radius: 2px;
+}
+
+/* Toolbar customizations */
+.ql-toolbar {
+  border: none !important;
+  border-bottom: 1px solid #E5E7EB !important;
+  background-color: #F9FAFB;
+  padding: 1rem;
+}
+
+.ql-toolbar .ql-picker-label {
+  color: #374151;
+}
+
+.ql-toolbar .ql-picker-options {
+  background-color: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 0.375rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.ql-toolbar button {
+  color: #374151;
+  border-radius: 0.25rem;
+  padding: 0.25rem;
+  margin: 0 0.125rem;
+}
+
+.ql-toolbar button:hover {
+  background-color: #E5E7EB;
+}
+
+.ql-toolbar button.ql-active {
+  background-color: #3B82F6;
+  color: white;
+}
+
+/* Container styling */
+.ql-container {
+  border: none !important;
+  font-family: inherit;
+}
+
+.ql-editor.ql-blank::before {
+  color: #9CA3AF;
+  font-style: italic;
+}
+
+/* Custom divider styling */
+.ql-editor hr {
+  border: none;
+  height: 2px;
+  background: linear-gradient(to right, transparent, #E5E7EB, transparent);
+  margin: 2rem 0;
+}
+
+/* Video responsive styling */
+.ql-editor .ql-video {
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 1rem 0;
+}
