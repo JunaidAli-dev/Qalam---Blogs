@@ -1,14 +1,15 @@
 {
-  "name": "blog-frontend",
+  "name": "qalam-frontend",
   "version": "0.1.0",
   "private": true,
+  "description": "Qalam - Modern Arabic-inspired blog platform frontend",
+  "homepage": ".",
   "dependencies": {
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^13.5.0",
     "@tinymce/tinymce-react": "^6.2.1",
-    "@uiw/react-md-editor": "^4.0.7",
     "axios": "^1.10.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -20,7 +21,8 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "build:production": "NODE_ENV=production react-scripts build"
   },
   "eslintConfig": {
     "extends": [
@@ -44,5 +46,19 @@
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17"
-  }
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "keywords": [
+    "react",
+    "blog",
+    "qalam",
+    "arabic",
+    "frontend",
+    "tailwindcss"
+  ],
+  "author": "Junaid Ali",
+  "license": "MIT"
 }

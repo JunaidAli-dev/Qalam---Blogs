@@ -11,12 +11,19 @@ const PORT = process.env.PORT || 3001;
 // Test database connection
 testConnection();
 
-// Middleware
+// CORS configuration for production and development
 app.use(cors({
-  origin: 'http://localhost:3000',
+  origin: process.env.NODE_ENV === 'production' 
+    ? [
+        'https://your-frontend-domain.vercel.app', // Replace with your actual frontend URL
+        'https://qalam-frontend.vercel.app'
+      ] 
+    : ['http://localhost:3000'],
   credentials: true
 }));
-app.use(express.json());
+
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -29,26 +36,56 @@ app.use('/api/upload', require('./routes/upload'));
 // Health check endpoint
 app.get('/', (req, res) => {
   res.json({ 
-    message: 'Blog API is running on port 3001!',
+    message: 'Qalam Blog API is running!',
     timestamp: new Date().toISOString(),
-    database: 'MySQL Connected'
+    database: 'MySQL Connected',
+    environment: process.env.NODE_ENV || 'development',
+    version: '1.0.0'
+  });
+});
+
+// API info endpoint
+app.get('/api', (req, res) => {
+  res.json({
+    name: 'Qalam Blog API',
+    version: '1.0.0',
+    endpoints: {
+      posts: '/api/posts',
+      auth: '/api/auth',
+      upload: '/api/upload'
+    },
+    status: 'active'
   });
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ message: 'Something went wrong!' });
+  console.error('Error:', err.stack);
+  res.status(500).json({ 
+    message: 'Something went wrong!',
+    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+  });
 });
 
-// 404 handler
+// 404 handler - FIXED VERSION
 app.use('/{*catchall}', (req, res) => {
-  res.status(404).json({ message: 'Route not found' });
+  res.status(404).json({ 
+    message: 'Route not found',
+    path: req.originalUrl,
+    method: req.method
+  });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📍 API URL: http://localhost:${PORT}`);
-  console.log(`🏥 Health check: http://localhost:${PORT}/`);
-  console.log(`📁 Uploads directory: ${path.join(__dirname, 'uploads')}`);
-});
+// Start server
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📍 API URL: http://localhost:${PORT}`);
+    console.log(`🏥 Health check: http://localhost:${PORT}/`);
+    console.log(`📁 Uploads directory: ${path.join(__dirname, 'uploads')}`);
+    console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  });
+}
+
+// Export for Vercel
+module.exports = app;
