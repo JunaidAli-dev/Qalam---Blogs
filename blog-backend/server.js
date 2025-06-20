@@ -12,15 +12,15 @@ const PORT = process.env.PORT || 3001;
 testConnection();
 
 // CORS configuration for production and development
+// In blog-backend/server.js
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? [
-        'https://your-frontend-domain.vercel.app', // Replace with your actual frontend URL
-        'https://qalam-frontend.vercel.app'
-      ] 
-    : ['http://localhost:3000'],
+  origin: [
+    'https://qalam-blogs-app.vercel.app', // Your actual frontend URL
+    'http://localhost:3000' // For local development
+  ],
   credentials: true
 }));
+
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
