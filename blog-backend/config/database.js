@@ -11,74 +11,156 @@ const createPool = () => {
       password: process.env.DB_PASSWORD,
       database: process.env.DB_NAME || 'blog_db',
       port: process.env.DB_PORT || 3306,
+      
+      // SSL Configuration for Azure MySQL
       ssl: process.env.NODE_ENV === 'production' ? {
-        rejectUnauthorized: false,
-        ca: undefined // Let Azure handle SSL certificate
+        rejectUnauthorized: false
       } : false,
+      
+      // Valid MySQL2 connection pool options only
       waitForConnections: true,
-      connectionLimit: 3, // Very low for serverless
+      connectionLimit: 3, // Low for serverless
       queueLimit: 0,
       acquireTimeout: 60000, // 60 seconds
       timeout: 60000, // 60 seconds
-      reconnect: true,
       charset: 'utf8mb4',
-      // Azure MySQL specific settings
-      connectTimeout: 60000,
-      socketPath: undefined,
-      // Handle connection drops
-      idleTimeout: 300000,
-      maxIdle: 3
+      
+      // Valid MySQL2 connection options
+      connectTimeout: 60000, // 60 seconds
+      
+      // Remove all invalid options that were causing warnings:
+      // reconnect: true, // REMOVED - Invalid for MySQL2
+      // socketPath: undefined, // REMOVED - Not needed
+      // idleTimeout: 300000, // REMOVED - Invalid for MySQL2
+      // maxIdle: 3 // REMOVED - Invalid for MySQL2
+      
+      // Valid additional options
+      supportBigNumbers: true,
+      bigNumberStrings: true,
+      dateStrings: false,
+      debug: false,
+      multipleStatements: false,
+      typeCast: true
     });
 
-    // Handle pool errors
+    // Handle pool connection events
     pool.on('connection', function (connection) {
-      console.log('Connected as id ' + connection.threadId);
+      console.log('✅ Connected as id ' + connection.threadId);
     });
 
+    // Handle pool errors with proper error handling
     pool.on('error', function(err) {
-      console.error('Database pool error:', err);
-      if(err.code === 'PROTOCOL_CONNECTION_LOST') {
-        console.log('Recreating pool...');
+      console.error('❌ Database pool error:', err.code, err.message);
+      
+      // Handle specific error types
+      if (err.code === 'PROTOCOL_CONNECTION_LOST' || 
+          err.code === 'ECONNRESET' || 
+          err.code === 'ETIMEDOUT') {
+        console.log('🔄 Connection lost, pool will recreate on next request');
+        // Don't recreate immediately, let it happen naturally
         pool = null;
-        return createPool();
       } else {
-        throw err;
+        console.error('💥 Unhandled database error:', err);
       }
+    });
+
+    // Handle pool acquire/release events for debugging
+    pool.on('acquire', function (connection) {
+      console.log('🔗 Connection %d acquired', connection.threadId);
+    });
+
+    pool.on('release', function (connection) {
+      console.log('🔓 Connection %d released', connection.threadId);
     });
   }
   return pool;
 };
 
 const testConnection = async () => {
+  let connection;
   try {
     const pool = createPool();
-    const connection = await pool.getConnection();
+    console.log('🔄 Testing database connection...');
+    
+    // Get connection with proper error handling
+    connection = await pool.getConnection();
     console.log('✅ Database connected successfully');
-    console.log(`📊 Database: ${process.env.DB_NAME || 'blog_db'}`);
-    console.log(`🌍 Host: ${process.env.DB_HOST || 'localhost'}`);
-    console.log(`👤 User: ${process.env.DB_USER || 'root'}`);
-    console.log(`🔌 Port: ${process.env.DB_PORT || 3306}`);
-    console.log(`🔒 SSL: ${process.env.NODE_ENV === 'production' ? 'Enabled' : 'Disabled'}`);
+    
+    // Log connection details
+    console.log('📊 Connection Details:');
+    console.log(`   Database: ${process.env.DB_NAME || 'blog_db'}`);
+    console.log(`   Host: ${process.env.DB_HOST || 'localhost'}`);
+    console.log(`   Port: ${process.env.DB_PORT || 3306}`);
+    console.log(`   User: ${process.env.DB_USER || 'root'}`);
+    console.log(`   SSL: ${process.env.NODE_ENV === 'production' ? 'Enabled' : 'Disabled'}`);
+    console.log(`   Thread ID: ${connection.threadId}`);
     
     // Test a simple query
-    const [rows] = await connection.execute('SELECT 1 as test');
+    console.log('🔍 Testing simple query...');
+    const [rows] = await connection.execute('SELECT 1 as test, NOW() as current_time');
     console.log('✅ Test query successful:', rows[0]);
     
-    connection.release();
-  } catch (error) {
-    console.error('❌ Database connection failed:', error.message);
-    console.error('🔍 Error code:', error.code);
-    console.error('🔍 Error errno:', error.errno);
-    console.error('🔍 Check your database credentials and connection settings');
+    // Test database existence
+    const [dbRows] = await connection.execute('SELECT DATABASE() as current_db');
+    console.log('✅ Current database:', dbRows[0].current_db);
     
-    // Log environment variables for debugging (without password)
-    console.log('🔧 Environment check:');
-    console.log('- DB_HOST:', process.env.DB_HOST ? 'Set' : 'Not set');
-    console.log('- DB_USER:', process.env.DB_USER ? 'Set' : 'Not set');
-    console.log('- DB_PASSWORD:', process.env.DB_PASSWORD ? 'Set' : 'Not set');
-    console.log('- DB_NAME:', process.env.DB_NAME ? 'Set' : 'Not set');
-    console.log('- NODE_ENV:', process.env.NODE_ENV);
+  } catch (error) {
+    console.error('❌ Database connection test failed:');
+    console.error('   Error:', error.message);
+    console.error('   Code:', error.code);
+    console.error('   Errno:', error.errno);
+    
+    // Specific error analysis
+    if (error.code === 'ETIMEDOUT') {
+      console.error('🔍 ETIMEDOUT Analysis:');
+      console.error('   - Check Azure MySQL firewall rules');
+      console.error('   - Enable "Allow Azure services" in Azure Portal');
+      console.error('   - Verify server is running and accessible');
+    } else if (error.code === 'ENOTFOUND') {
+      console.error('🔍 ENOTFOUND Analysis:');
+      console.error('   - Check DB_HOST environment variable');
+      console.error('   - Verify server hostname is correct');
+    } else if (error.code === 'ER_ACCESS_DENIED_ERROR') {
+      console.error('🔍 ACCESS DENIED Analysis:');
+      console.error('   - Check DB_USER and DB_PASSWORD');
+      console.error('   - Verify user permissions');
+    }
+    
+    // Environment variables check (without exposing password)
+    console.error('🔧 Environment Variables:');
+    console.error(`   DB_HOST: ${process.env.DB_HOST ? 'Set ✅' : 'Not set ❌'}`);
+    console.error(`   DB_USER: ${process.env.DB_USER ? 'Set ✅' : 'Not set ❌'}`);
+    console.error(`   DB_PASSWORD: ${process.env.DB_PASSWORD ? 'Set ✅' : 'Not set ❌'}`);
+    console.error(`   DB_NAME: ${process.env.DB_NAME ? 'Set ✅' : 'Not set ❌'}`);
+    console.error(`   NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
+    
+  } finally {
+    if (connection) {
+      connection.release();
+      console.log('🔓 Test connection released');
+    }
   }
 };
 
-module.exports = { pool: createPool(), testConnection };
+// Graceful shutdown
+const closePool = async () => {
+  if (pool) {
+    try {
+      await pool.end();
+      console.log('✅ Database pool closed gracefully');
+      pool = null;
+    } catch (error) {
+      console.error('❌ Error closing pool:', error.message);
+    }
+  }
+};
+
+// Handle process termination
+process.on('SIGINT', closePool);
+process.on('SIGTERM', closePool);
+
+module.exports = { 
+  pool: createPool(), 
+  testConnection,
+  closePool
+};
