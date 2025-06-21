@@ -19,7 +19,7 @@ const createPool = () => {
       
       // Valid MySQL2 connection pool options only
       waitForConnections: true,
-      connectionLimit: 3, // Low for serverless
+      connectionLimit: 3, // Low for serverless (Vercel)
       queueLimit: 0,
       acquireTimeout: 60000, // 60 seconds
       timeout: 60000, // 60 seconds
@@ -27,12 +27,6 @@ const createPool = () => {
       
       // Valid MySQL2 connection options
       connectTimeout: 60000, // 60 seconds
-      
-      // Remove all invalid options that were causing warnings:
-      // reconnect: true, // REMOVED - Invalid for MySQL2
-      // socketPath: undefined, // REMOVED - Not needed
-      // idleTimeout: 300000, // REMOVED - Invalid for MySQL2
-      // maxIdle: 3 // REMOVED - Invalid for MySQL2
       
       // Valid additional options
       supportBigNumbers: true,
@@ -57,7 +51,6 @@ const createPool = () => {
           err.code === 'ECONNRESET' || 
           err.code === 'ETIMEDOUT') {
         console.log('🔄 Connection lost, pool will recreate on next request');
-        // Don't recreate immediately, let it happen naturally
         pool = null;
       } else {
         console.error('💥 Unhandled database error:', err);
@@ -114,7 +107,7 @@ const testConnection = async () => {
     if (error.code === 'ETIMEDOUT') {
       console.error('🔍 ETIMEDOUT Analysis:');
       console.error('   - Check Azure MySQL firewall rules');
-      console.error('   - Enable "Allow Azure services" in Azure Portal');
+      console.error('   - Add firewall rule: 0.0.0.0 to 255.255.255.255');
       console.error('   - Verify server is running and accessible');
     } else if (error.code === 'ENOTFOUND') {
       console.error('🔍 ENOTFOUND Analysis:');
