@@ -31,6 +31,8 @@ jobs:
         run: |
           cd blog-frontend
           npm ci --legacy-peer-deps
+        env:
+          CI: false
       
       - name: Build application
         run: |
@@ -43,6 +45,13 @@ jobs:
           DISABLE_ESLINT_PLUGIN: true
           GENERATE_SOURCEMAP: false
       
+      - name: List build contents (Debug)
+        run: |
+          echo "Checking build directory contents:"
+          ls -la blog-frontend/build/ || echo "Build directory not found"
+          echo "Checking for index.html:"
+          ls -la blog-frontend/build/index.html || echo "index.html not found"
+      
       - name: Build And Deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
@@ -52,14 +61,10 @@ jobs:
           action: "upload"
           ###### Repository/Build Configurations ######
           app_location: "blog-frontend" # App source code path
-          api_location: "" # Api source code path - optional
-          output_location: "build" # Built app content directory - optional
+          api_location: "" # No API (using Vercel backend)
+          output_location: "build" # Built app content directory
           skip_app_build: true # We already built the app in previous step
           ###### End of Repository/Build Configurations ######
-        env:
-          CI: false
-          REACT_APP_API_URL: https://qalam-blogs-backend.vercel.app
-          NODE_ENV: production
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
