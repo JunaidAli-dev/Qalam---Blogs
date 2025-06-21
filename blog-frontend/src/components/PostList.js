@@ -1,5 +1,5 @@
 // src/components/PostList.js
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { usePosts } from '../hooks/usePosts';
 import { useAuth } from '../context/AuthContext';
@@ -8,7 +8,6 @@ import ErrorMessage from './ErrorMessage';
 import QalamLogo from './QalamLogo';
 import axios from 'axios';
 import API_BASE_URL from '../config/api';
-
 
 // Helper function to format dates safely
 const formatDate = (dateString) => {
@@ -75,21 +74,24 @@ const PostCard = ({ post }) => {
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
 
-  React.useEffect(() => {
-    if (isAuthenticated) {
-      checkLikeStatus();
-    }
-  }, [isAuthenticated, post.id]);
-
-  const checkLikeStatus = async () => {
+  const checkLikeStatus = useCallback(async () => {
+    if (!isAuthenticated || !post.id) return;
+    
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/posts/${post.id}/liked`);
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE_URL}/api/posts/${post.id}/liked`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       setHasLiked(response.data.hasLiked);
       setLikes(response.data.likesCount);
     } catch (error) {
       console.error('Error checking like status:', error);
     }
-  };
+  }, [isAuthenticated, post.id]);
+
+  React.useEffect(() => {
+    checkLikeStatus();
+  }, [checkLikeStatus]);
 
   const handleLike = async () => {
     if (!isAuthenticated) {
@@ -101,12 +103,17 @@ const PostCard = ({ post }) => {
     
     setIsLiking(true);
     try {
+      const token = localStorage.getItem('token');
       if (hasLiked) {
-        const response = await axios.delete(`${API_BASE_URL}/api/posts/${post.id}/like`);
+        const response = await axios.delete(`${API_BASE_URL}/api/posts/${post.id}/like`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
         setLikes(response.data.likesCount);
         setHasLiked(false);
       } else {
-        const response = await axios.post(`${API_BASE_URL}/api/posts/${post.id}/like`);
+        const response = await axios.post(`${API_BASE_URL}/api/posts/${post.id}/like`, {}, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
         setLikes(response.data.likesCount);
         setHasLiked(true);
       }
@@ -297,6 +304,14 @@ const PostCard = ({ post }) => {
 
 const PostList = () => {
   const { posts, loading, error, fetchPosts } = usePosts();
+
+  // Debug logging
+  React.useEffect(() => {
+    console.log('PostList - API_BASE_URL:', API_BASE_URL);
+    console.log('PostList - Posts:', posts);
+    console.log('PostList - Loading:', loading);
+    console.log('PostList - Error:', error);
+  }, [posts, loading, error]);
 
   if (loading) {
     return <LoadingSpinner text="Loading amazing posts..." />;
