@@ -13,13 +13,13 @@ testConnection();
 // CORS configuration for Vercel deployment
 app.use(cors({
   origin: [
-    'https://qalam-blogs-app.vercel.app', // Your frontend URL
-    'http://localhost:3000' // For local development
+    'https://qalam-blogs-app.vercel.app', // Vercel frontend
+    'https://salmon-pebble-0cf2bbb1e.2.azurestaticapps.net', // Azure frontend
+    'http://localhost:3000' // Local development
   ],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  credentials: true
 }));
+
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
