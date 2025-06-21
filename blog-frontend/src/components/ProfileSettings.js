@@ -2,6 +2,8 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
+import API_BASE_URL from '../config/api';
+
 
 const ProfileSettings = () => {
   const { user, logout } = useAuth();
@@ -28,7 +30,7 @@ const ProfileSettings = () => {
     setMessage('');
 
     try {
-      const response = await axios.put('http://localhost:3001/api/auth/update-profile', {
+      const response = await axios.put(`${API_BASE_URL}/api/auth/update-profile'`, {
         username: profileData.username,
         email: profileData.email
       });
@@ -58,7 +60,7 @@ const ProfileSettings = () => {
     }
 
     try {
-      await axios.put('http://localhost:3001/api/auth/update-password', passwordData);
+      await axios.put(`${API_BASE_URL}/api/auth/update-password`, passwordData);
       setMessage('Password updated successfully!');
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (err) {
