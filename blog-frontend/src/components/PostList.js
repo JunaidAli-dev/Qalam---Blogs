@@ -27,7 +27,7 @@ const formatDate = (dateString) => {
 // Enhanced content preview function
 const getPreviewContent = (content) => {
   if (!content) return 'No content available';
-  
+
   const cleanText = content
     .replace(/<img[^>]*>/g, '')
     .replace(/<video[^>]*>.*?<\/video>/g, '')
@@ -38,46 +38,65 @@ const getPreviewContent = (content) => {
     .replace(/&gt;/g, '>')
     .replace(/\s+/g, ' ')
     .trim();
-  
+
   return cleanText.length > 150 ? `${cleanText.substring(0, 150)}...` : cleanText;
 };
 
-// FIXED: Enhanced image extraction with URL decoding and validation
+// FIXED: Enhanced image extraction with comprehensive URL decoding
 const getFirstImage = (content) => {
   if (!content) return null;
-  
+
   try {
     console.log('Extracting image from content:', content.substring(0, 200));
-    
+
     // Method 1: Try to extract img tag with src attribute
     const imgMatch = content.match(/<img[^>]+src\s*=\s*["']([^"']+)["'][^>]*>/i);
     if (imgMatch && imgMatch[1]) {
       let url = imgMatch[1].trim();
       console.log('Found raw image URL:', url);
-      
-      // FIXED: Decode HTML entities in URL
+
+      // FIXED: Comprehensive HTML entity decoding
       url = url
         .replace(/&amp;/g, '&')
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
         .replace(/&quot;/g, '"')
         .replace(/&#39;/g, "'")
-        .replace(/&nbsp;/g, ' ');
-      
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&#x([0-9A-Fa-f]+);/g, (match, hex) => String.fromCharCode(parseInt(hex, 16)))
+        .replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(parseInt(dec, 10)));
+
       console.log('Decoded image URL:', url);
-      
-      // Validate and return URL
+
+      // Additional validation and cleaning
       if (url.startsWith('http') || url.startsWith('https') || url.startsWith('/') || url.startsWith('data:')) {
-        // Additional validation for common image extensions
-        const imageExtensions = /\.(jpg|jpeg|png|gif|webp|svg|bmp|tiff)(\?.*)?$/i;
-        const isImageUrl = imageExtensions.test(url) || url.includes('image') || url.startsWith('data:image');
-        
-        if (isImageUrl) {
+        // Remove any trailing incomplete parameters
+        if (url.includes('&') && !url.match(/&[a-zA-Z0-9]+=.*/)) {
+          const parts = url.split('&');
+          url = parts[0] + '&' + parts.slice(1).filter(param => param.includes('=')).join('&');
+        }
+
+        // Validate URL structure
+        try {
+          new URL(url);
           return url;
+        } catch (urlError) {
+          console.error('Invalid URL structure:', url);
+          // Try to fix common issues
+          if (url.includes('&amp;')) {
+            url = url.replace(/&amp;/g, '&');
+            try {
+              new URL(url);
+              return url;
+            } catch (e) {
+              console.error('Still invalid after fixing &amp;:', url);
+            }
+          }
+          return null;
         }
       }
     }
-    
+
     // Method 2: Try to find any URL that looks like an image
     const urlMatch = content.match(/(https?:\/\/[^\s<>"]+\.(?:jpg|jpeg|png|gif|webp|svg))/i);
     if (urlMatch && urlMatch[1]) {
@@ -85,14 +104,14 @@ const getFirstImage = (content) => {
       console.log('Found image URL via pattern matching:', url);
       return url;
     }
-    
+
     // Method 3: Look for base64 images
     const base64Match = content.match(/data:image\/[^;]+;base64,[^"'\s>]+/i);
     if (base64Match && base64Match[0]) {
       console.log('Found base64 image');
       return base64Match[0];
     }
-    
+
     // Method 4: Look for any image hosting service URLs
     const imageHostMatch = content.match(/(https?:\/\/[^\s<>"]*(?:istockphoto|unsplash|pexels|pixabay|imgur|cloudinary)[^\s<>"]*)/i);
     if (imageHostMatch && imageHostMatch[1]) {
@@ -100,7 +119,7 @@ const getFirstImage = (content) => {
       console.log('Found image hosting URL:', url);
       return url;
     }
-    
+
     console.log('No image found in content');
     return null;
   } catch (error) {
@@ -121,7 +140,7 @@ const PostCard = ({ post }) => {
 
   const checkLikeStatusCallback = useCallback(async () => {
     if (!isAuthenticated || !post.id) return;
-    
+
     try {
       const response = await checkLikeStatus(post.id);
       setHasLiked(response.hasLiked);
@@ -142,7 +161,7 @@ const PostCard = ({ post }) => {
     }
 
     if (isLiking) return;
-    
+
     setIsLiking(true);
     try {
       const result = await toggleLike(post.id);
@@ -160,12 +179,12 @@ const PostCard = ({ post }) => {
 
   const handleShare = async () => {
     if (isSharing) return;
-    
+
     setIsSharing(true);
     try {
       const response = await sharePost(post.id);
       setShares(response.shares);
-      
+
       const postUrl = `${window.location.origin}/post/${post.id}`;
       await navigator.clipboard.writeText(postUrl);
       alert('Post link copied to clipboard!');
@@ -192,12 +211,20 @@ const PostCard = ({ post }) => {
     console.error('Original URL might have encoding issues');
     setImageError(true);
     setImageLoaded(false);
-    
+
     // Try to fix common URL encoding issues
     const originalSrc = e.target.src;
     if (originalSrc.includes('%26')) {
       const fixedSrc = originalSrc.replace(/%26/g, '&');
       console.log('Trying fixed URL:', fixedSrc);
+      e.target.src = fixedSrc;
+      return;
+    }
+
+    // Try to fix &amp; issues
+    if (originalSrc.includes('&amp;')) {
+      const fixedSrc = originalSrc.replace(/&amp;/g, '&');
+      console.log('Trying fixed &amp; URL:', fixedSrc);
       e.target.src = fixedSrc;
       return;
     }
@@ -228,12 +255,11 @@ const PostCard = ({ post }) => {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
                 </div>
               )}
-              <img 
-                src={firstImage} 
+              <img
+                src={firstImage}
                 alt={post.title || 'Post image'}
-                className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-105 rounded-xl ${
-                  imageLoaded ? 'opacity-100' : 'opacity-0'
-                }`}
+                className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-105 rounded-xl ${imageLoaded ? 'opacity-100' : 'opacity-0'
+                  }`}
                 onLoad={handleImageLoad}
                 onError={handleImageError}
                 loading="lazy"
@@ -249,7 +275,7 @@ const PostCard = ({ post }) => {
             </div>
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center rounded-xl bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100">
-              <QalamLogo width={48} height={48} />
+              <QalamLogo width={48} height={48} variant="contrast" />
               {firstImage && imageError && (
                 <p className="text-xs text-gray-500 mt-2 text-center px-2">Image failed to load</p>
               )}
@@ -258,7 +284,7 @@ const PostCard = ({ post }) => {
               )}
             </div>
           )}
-          
+
           {/* Category Badge */}
           <div className="absolute top-3 left-3">
             <span className="inline-block px-3 py-1 text-xs font-semibold text-white bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full backdrop-blur-sm bg-opacity-90 shadow-lg">
@@ -266,7 +292,7 @@ const PostCard = ({ post }) => {
             </span>
           </div>
         </div>
-        
+
         {/* Content Section with stable layout */}
         <div className="flex-1 p-4 md:p-6 flex flex-col min-h-[320px]">
           <div className="flex-1 min-h-0">
@@ -283,7 +309,7 @@ const PostCard = ({ post }) => {
                   <p className="text-xs text-gray-500">{formatDate(post.created_at)}</p>
                 </div>
               </div>
-              
+
               <div className="flex items-center space-x-4 text-sm text-gray-500 flex-shrink-0">
                 <div className="flex items-center space-x-1">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -300,23 +326,23 @@ const PostCard = ({ post }) => {
                 </div>
               </div>
             </div>
-            
+
             {/* Title */}
             <h2 className="text-lg md:text-xl font-bold text-gray-900 mb-2 hover:text-transparent hover:bg-clip-text hover:bg-gradient-to-r hover:from-indigo-600 hover:to-purple-600 transition-all duration-200 line-clamp-2 leading-tight">
               <Link to={`/post/${post.id}`} className="block">
                 {post.title}
               </Link>
             </h2>
-            
+
             {/* Preview Text */}
             <p className="text-gray-600 leading-relaxed text-sm line-clamp-3 mb-4 flex-1">
               {previewText}
             </p>
           </div>
-          
+
           {/* FIXED: Footer with stable positioning - ALWAYS at bottom */}
           <div className="flex flex-col space-y-3 md:flex-row md:items-center md:justify-between md:space-y-0 pt-4 border-t border-gray-100 mt-auto">
-            <Link 
+            <Link
               to={`/post/${post.id}`}
               className="inline-flex items-center text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 font-semibold transition-all duration-200 group text-sm md:text-base"
             >
@@ -325,29 +351,28 @@ const PostCard = ({ post }) => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
               </svg>
             </Link>
-            
+
             {/* FIXED: Like and Share buttons with proper styling and stable positioning */}
             <div className="flex items-center space-x-3 flex-shrink-0">
               <button
                 onClick={handleLike}
                 disabled={isLiking}
-                className={`flex items-center space-x-2 transition-all duration-200 disabled:opacity-50 px-3 py-2 rounded-full text-sm font-medium shadow-md hover:shadow-lg ${
-                  hasLiked 
-                    ? 'text-red-500 bg-red-50 border border-red-200' 
+                className={`flex items-center space-x-2 transition-all duration-200 disabled:opacity-50 px-3 py-2 rounded-full text-sm font-medium shadow-md hover:shadow-lg ${hasLiked
+                    ? 'text-red-500 bg-red-50 border border-red-200'
                     : 'text-gray-500 hover:text-red-500 hover:bg-red-50 border border-gray-200 hover:border-red-200'
-                }`}
+                  }`}
               >
-                <svg 
-                  className="w-4 h-4" 
-                  fill={hasLiked ? "currentColor" : "none"} 
-                  stroke="currentColor" 
+                <svg
+                  className="w-4 h-4"
+                  fill={hasLiked ? "currentColor" : "none"}
+                  stroke="currentColor"
                   viewBox="0 0 24 24"
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                 </svg>
                 <span>{likes}</span>
               </button>
-              
+
               <button
                 onClick={handleShare}
                 disabled={isSharing}
@@ -398,7 +423,7 @@ const PostList = () => {
             </span>
           </h1>
           <p className="text-base sm:text-lg lg:text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed px-4">
-            Discover insights, tutorials, and stories about technology, development, and innovation. 
+            Discover insights, tutorials, and stories about technology, development, and innovation.
             Join me on this journey of continuous learning and growth.
           </p>
         </div>
@@ -414,8 +439,8 @@ const PostList = () => {
             <p className="text-gray-600 mb-6 sm:mb-8 max-w-md mx-auto px-4">
               It looks like there are no blog posts available at the moment. Be the first to create one!
             </p>
-            <Link 
-              to="/admin" 
+            <Link
+              to="/admin"
               className="inline-flex items-center bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 text-sm sm:text-base"
             >
               <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -434,15 +459,15 @@ const PostList = () => {
               <div className="flex items-center justify-between sm:justify-end space-x-4">
                 <span className="text-sm sm:text-base text-gray-600 font-medium">{posts.length} {posts.length === 1 ? 'post' : 'posts'}</span>
                 <div className="h-4 w-px bg-gray-300 hidden sm:block"></div>
-                <Link 
-                  to="/admin" 
+                <Link
+                  to="/admin"
                   className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 font-semibold transition-all duration-200 text-sm sm:text-base"
                 >
                   Write a post
                 </Link>
               </div>
             </div>
-            
+
             {/* Posts List */}
             <div className="space-y-6 sm:space-y-8">
               {posts.map(post => (

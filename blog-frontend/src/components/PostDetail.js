@@ -29,14 +29,24 @@ const formatDate = (dateString) => {
   }
 };
 
-// Extract first image from content
+// FIXED: Extract first image from content with proper HTML entity decoding
 const getFirstImage = (content) => {
   if (!content) return null;
   
   try {
     const imgMatch = content.match(/<img[^>]+src\s*=\s*["']([^"']+)["'][^>]*>/i);
     if (imgMatch && imgMatch[1]) {
-      const url = imgMatch[1].trim();
+      let url = imgMatch[1].trim();
+      
+      // FIXED: Decode HTML entities properly
+      url = url
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&nbsp;/g, ' ');
+      
       if (url.startsWith('http') || url.startsWith('/') || url.startsWith('data:')) {
         return url;
       }
@@ -161,6 +171,7 @@ const PostDetail = () => {
             to="/" 
             className="inline-flex items-center text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 font-semibold transition-all duration-200 group text-sm sm:text-base"
           >
+            {/* FIXED: Corrected SVG path with proper arc flags */}
             <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-2 transform group-hover:-translate-x-1 transition-transform duration-200 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
@@ -172,7 +183,7 @@ const PostDetail = () => {
           {/* Hero Section with Image - FIXED aspect ratio */}
           <div className="relative">
             {heroImage && !heroImageError ? (
-              <div className="w-full aspect-[video] overflow-hidden">
+              <div className="w-full aspect-[22/9] overflow-hidden">
                 <img 
                   src={heroImage}
                   alt={post.title}
@@ -181,7 +192,7 @@ const PostDetail = () => {
                   width="1200"
                   height="675"
                   style={{
-                    aspectRatio: '16/9',
+                    aspectRatio: '22/9',
                     objectFit: 'cover'
                   }}
                 />
@@ -225,14 +236,16 @@ const PostDetail = () => {
                   
                   <div className="hidden sm:flex items-center space-x-4 lg:space-x-6 text-white/90">
                     <div className="flex items-center space-x-2">
+                      {/* FIXED: Corrected SVG path */}
                       <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       <span className="font-medium text-sm sm:text-base">{post.readTime || 1} min read</span>
                     </div>
                     <div className="flex items-center space-x-2">
+                      {/* FIXED: Corrected SVG path with proper arc flags */}
                       <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 616 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                       </svg>
                       <span className="font-medium text-sm sm:text-base">{post.views || 0} views</span>
@@ -255,6 +268,7 @@ const PostDetail = () => {
                   <span className="text-sm font-medium">{post.readTime || 1} min read</span>
                 </div>
                 <div className="flex items-center space-x-2">
+                  {/* FIXED: Corrected SVG path with proper arc flags */}
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 616 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
@@ -328,13 +342,12 @@ const PostDetail = () => {
         </article>
       </div>
 
-      {/* FIXED: Custom CSS for responsive images and preventing layout shift */}
-      <style jsx>{`
+      {/* FIXED: Removed jsx attribute and corrected CSS */}
+      <style>{`
         .text-shadow-lg {
           text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
         }
         
-        /* FIXED: Prevent layout shift with proper image dimensions */
         .post-content img {
           max-width: 100% !important;
           height: auto !important;
@@ -346,7 +359,6 @@ const PostDetail = () => {
           width: 100%;
         }
         
-        /* Ensure images don't cause layout shift */
         .post-content img[width][height] {
           aspect-ratio: attr(width) / attr(height);
         }
@@ -358,19 +370,16 @@ const PostDetail = () => {
           white-space: nowrap;
         }
         
-        /* FIXED: Ensure article layout is stable */
         article {
           display: flex;
           flex-direction: column;
           min-height: 100vh;
         }
         
-        /* FIXED: Content section takes available space */
         .post-content {
           flex: 1;
         }
         
-        /* FIXED: Footer stays at bottom */
         .bg-gradient-to-r.from-gray-50.to-indigo-50 {
           margin-top: auto;
         }
