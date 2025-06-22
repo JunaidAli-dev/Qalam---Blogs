@@ -1,11 +1,11 @@
-// blog-backend/models/Post.js
 const { pool } = require('../config/database');
 
 class Post {
   static async findById(id) {
     try {
       const [rows] = await pool.execute(`
-        SELECT p.*, u.username 
+        SELECT p.*, u.username,
+               (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) as likesCount
         FROM posts p 
         JOIN users u ON p.user_id = u.id 
         WHERE p.id = ?
@@ -18,11 +18,10 @@ class Post {
 
   static async getAll(limit = 20, offset = 0, status = 'published') {
     try {
-      // Use query() instead of execute() for LIMIT/OFFSET to avoid MySQL 8.0.22+ bug
       const [rows] = await pool.query(`
-        SELECT p.id, p.title, p.content, p.slug, p.views, p.shares, p.created_at, p.updated_at,
+        SELECT p.id, p.title, p.content, p.slug, p.views, p.shares, p.created_at, p.updated_at, p.user_id,
                u.username,
-               (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) as likes_count
+               (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) as likesCount
         FROM posts p 
         JOIN users u ON p.user_id = u.id 
         WHERE p.status = ?
@@ -62,7 +61,10 @@ class Post {
       
       if (fields.length === 0) return false;
       
+      // Add updated_at timestamp
+      fields.push('updated_at = CURRENT_TIMESTAMP');
       values.push(parseInt(id));
+      
       const [result] = await pool.execute(
         `UPDATE posts SET ${fields.join(', ')} WHERE id = ?`,
         values
@@ -76,18 +78,6 @@ class Post {
   static async delete(id) {
     try {
       const [result] = await pool.execute('DELETE FROM posts WHERE id = ?', [parseInt(id)]);
-      return result.affectedRows > 0;
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  static async incrementViews(id) {
-    try {
-      const [result] = await pool.execute(
-        'UPDATE posts SET views = views + 1 WHERE id = ?',
-        [parseInt(id)]
-      );
       return result.affectedRows > 0;
     } catch (error) {
       throw error;
@@ -108,10 +98,10 @@ class Post {
 
   static async getByUserId(userId, limit = 20, offset = 0) {
     try {
-      // Use query() instead of execute() for LIMIT/OFFSET
       const [rows] = await pool.query(`
         SELECT p.*, u.username,
-               (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) as likes_count
+               (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) as likesCount,
+               (SELECT COUNT(DISTINCT pl.user_id) FROM post_likes pl WHERE pl.post_id = p.id) as uniqueLikes
         FROM posts p 
         JOIN users u ON p.user_id = u.id 
         WHERE p.user_id = ?
@@ -126,10 +116,9 @@ class Post {
 
   static async search(query, limit = 20, offset = 0) {
     try {
-      // Use query() instead of execute() for LIMIT/OFFSET
       const [rows] = await pool.query(`
         SELECT p.*, u.username,
-               (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) as likes_count
+               (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) as likesCount
         FROM posts p 
         JOIN users u ON p.user_id = u.id 
         WHERE p.status = 'published' 
@@ -161,37 +150,54 @@ class Post {
     return slug;
   }
 
- 
-static async incrementViews(id, userIdentifier) {
-  try {
-    // Check if this user has viewed this post recently (within 24 hours)
-    const [existingView] = await pool.execute(
-      'SELECT id FROM post_views WHERE post_id = ? AND user_identifier = ? AND created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)',
-      [parseInt(id), userIdentifier]
-    );
-
-    // If no recent view found, increment the count
-    if (existingView.length === 0) {
-      // Insert new view record
-      await pool.execute(
-        'INSERT INTO post_views (post_id, user_identifier) VALUES (?, ?)',
+  static async incrementViews(id, userIdentifier) {
+    try {
+      // Check if this user has viewed this post recently (within 24 hours)
+      const [existingView] = await pool.execute(
+        'SELECT id FROM post_views WHERE post_id = ? AND user_identifier = ? AND created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)',
         [parseInt(id), userIdentifier]
       );
 
-      // Increment the views count
-      const [result] = await pool.execute(
-        'UPDATE posts SET views = views + 1 WHERE id = ?',
-        [parseInt(id)]
-      );
-      return result.affectedRows > 0;
-    }
-    
-    return false; // View not counted (recent view exists)
-  } catch (error) {
-    throw error;
-  }
-}
+      // If no recent view found, increment the count
+      if (existingView.length === 0) {
+        // Insert new view record
+        await pool.execute(
+          'INSERT INTO post_views (post_id, user_identifier) VALUES (?, ?)',
+          [parseInt(id), userIdentifier]
+        );
 
+        // Increment the views count
+        const [result] = await pool.execute(
+          'UPDATE posts SET views = views + 1 WHERE id = ?',
+          [parseInt(id)]
+        );
+        return result.affectedRows > 0;
+      }
+      
+      return false; // View not counted (recent view exists)
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Get post analytics for admin (Instagram-style)
+  static async getAnalytics(postId, userId) {
+    try {
+      const [rows] = await pool.execute(`
+        SELECT 
+          p.views, p.shares,
+          (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) as totalLikes,
+          (SELECT COUNT(DISTINCT pl.user_id) FROM post_likes pl WHERE pl.post_id = p.id) as uniqueUsers,
+          (SELECT COUNT(*) FROM post_views pv WHERE pv.post_id = p.id) as totalViews,
+          (SELECT COUNT(DISTINCT pv.user_identifier) FROM post_views pv WHERE pv.post_id = p.id) as uniqueViewers
+        FROM posts p 
+        WHERE p.id = ? AND p.user_id = ?
+      `, [parseInt(postId), parseInt(userId)]);
+      return rows[0] || null;
+    } catch (error) {
+      throw error;
+    }
+  }
 }
 
 module.exports = Post;

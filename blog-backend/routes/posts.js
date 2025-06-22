@@ -1,6 +1,5 @@
-// blog-backend/routes/posts.js
 const express = require('express');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, authorizePostOwner } = require('../middleware/auth');
 const Post = require('../models/Post');
 const PostLike = require('../models/PostLike');
 const router = express.Router();
@@ -58,13 +57,9 @@ router.get('/:id', async (req, res) => {
 
     // Get fresh post data with updated views
     const updatedPost = await Post.findById(postId);
-
-    // Get likes count
-    const likesCount = await PostLike.getLikesCount(postId);
     
     const postWithMeta = {
       ...updatedPost,
-      likesCount,
       readTime: calculateReadTime(updatedPost.content)
     };
 
@@ -93,7 +88,7 @@ router.get('/:id/liked', authenticateToken, async (req, res) => {
   }
 });
 
-// Like post - Requires authentication
+// Toggle like post - Requires authentication
 router.post('/:id/like', authenticateToken, async (req, res) => {
   try {
     const postId = parseInt(req.params.id);
@@ -106,25 +101,20 @@ router.post('/:id/like', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Post not found' });
     }
 
-    const hasLiked = await PostLike.hasUserLiked(postId, req.user.id);
-    if (hasLiked) {
-      return res.status(400).json({ message: 'You have already liked this post' });
-    }
-
-    await PostLike.addLike(postId, req.user.id);
-    const likesCount = await PostLike.getLikesCount(postId);
+    const result = await PostLike.toggleLike(postId, req.user.id);
 
     res.json({ 
-      likesCount,
-      message: 'Post liked successfully'
+      likesCount: result.likesCount,
+      action: result.action,
+      message: `Post ${result.action} successfully`
     });
   } catch (error) {
-    console.error('Error liking post:', error);
-    res.status(500).json({ message: 'Error liking post', error: error.message });
+    console.error('Error toggling like:', error);
+    res.status(500).json({ message: 'Error toggling like', error: error.message });
   }
 });
 
-// Unlike post - Requires authentication
+// Unlike post - Requires authentication (for compatibility)
 router.delete('/:id/like', authenticateToken, async (req, res) => {
   try {
     const postId = parseInt(req.params.id);
@@ -197,7 +187,6 @@ router.post('/', authenticateToken, async (req, res) => {
     const newPost = await Post.findById(postId);
     const postWithMeta = {
       ...newPost,
-      likesCount: 0,
       readTime: calculateReadTime(newPost.content)
     };
 
@@ -209,44 +198,31 @@ router.post('/', authenticateToken, async (req, res) => {
 });
 
 // UPDATE post - Requires authentication and ownership
-router.put('/:id', authenticateToken, async (req, res) => {
+router.put('/:id', authenticateToken, authorizePostOwner, async (req, res) => {
   try {
     const postId = parseInt(req.params.id);
-    if (isNaN(postId)) {
-      return res.status(400).json({ message: 'Invalid post ID' });
-    }
-
-    const post = await Post.findById(postId);
-    if (!post) {
-      return res.status(404).json({ message: 'Post not found' });
-    }
-
-    if (post.user_id !== req.user.id) {
-      return res.status(403).json({ message: 'You can only edit your own posts' });
-    }
-
     const { title, content } = req.body;
+    
     if (!title || !content) {
       return res.status(400).json({ message: 'Title and content are required' });
     }
 
+    const currentPost = await Post.findById(postId);
     const updateData = {
       title: title.trim(),
       content: content.trim()
     };
 
     // Generate new slug if title changed
-    if (title.trim() !== post.title) {
+    if (title.trim() !== currentPost.title) {
       updateData.slug = await Post.generateSlug(title);
     }
 
     await Post.update(postId, updateData);
     const updatedPost = await Post.findById(postId);
-    const likesCount = await PostLike.getLikesCount(postId);
 
     const postWithMeta = {
       ...updatedPost,
-      likesCount,
       readTime: calculateReadTime(updatedPost.content)
     };
 
@@ -258,27 +234,61 @@ router.put('/:id', authenticateToken, async (req, res) => {
 });
 
 // DELETE post - Requires authentication and ownership
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', authenticateToken, authorizePostOwner, async (req, res) => {
+  try {
+    const postId = parseInt(req.params.id);
+    await Post.delete(postId);
+    res.json({ message: 'Post deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting post:', error);
+    res.status(500).json({ message: 'Error deleting post', error: error.message });
+  }
+});
+
+// GET user's own posts - Requires authentication
+router.get('/my/posts', authenticateToken, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+
+    const posts = await Post.getByUserId(req.user.id, limit, offset);
+    
+    const postsWithReadTime = posts.map(post => ({
+      ...post,
+      readTime: calculateReadTime(post.content)
+    }));
+
+    res.json(postsWithReadTime);
+  } catch (error) {
+    console.error('Error fetching user posts:', error);
+    res.status(500).json({ message: 'Error fetching user posts', error: error.message });
+  }
+});
+
+// GET post analytics - Requires authentication and ownership
+router.get('/:id/analytics', authenticateToken, async (req, res) => {
   try {
     const postId = parseInt(req.params.id);
     if (isNaN(postId)) {
       return res.status(400).json({ message: 'Invalid post ID' });
     }
 
+    // Check if user owns the post
     const post = await Post.findById(postId);
     if (!post) {
       return res.status(404).json({ message: 'Post not found' });
     }
 
     if (post.user_id !== req.user.id) {
-      return res.status(403).json({ message: 'You can only delete your own posts' });
+      return res.status(403).json({ message: 'You can only view analytics for your own posts' });
     }
 
-    await Post.delete(postId);
-    res.json({ message: 'Post deleted successfully' });
+    const analytics = await Post.getAnalytics(postId, req.user.id);
+    res.json(analytics);
   } catch (error) {
-    console.error('Error deleting post:', error);
-    res.status(500).json({ message: 'Error deleting post', error: error.message });
+    console.error('Error fetching analytics:', error);
+    res.status(500).json({ message: 'Error fetching analytics', error: error.message });
   }
 });
 
