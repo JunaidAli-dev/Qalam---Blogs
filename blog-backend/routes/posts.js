@@ -11,6 +11,42 @@ function calculateReadTime(content) {
   return Math.ceil(wordCount / wordsPerMinute);
 }
 
+// IMPORTANT: Put specific routes BEFORE parameterized routes
+// GET user's own posts - MUST be before /:id route
+router.get('/my-posts', authenticateToken, async (req, res) => {
+  try {
+    console.log('Fetching posts for user ID:', req.user.id);
+    
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+
+    // Get posts ONLY for the authenticated user
+    const posts = await Post.getByUserId(req.user.id, limit, offset);
+    
+    console.log(`Found ${posts.length} posts for user ${req.user.id}`);
+    
+    const postsWithReadTime = posts.map(post => ({
+      ...post,
+      readTime: calculateReadTime(post.content)
+    }));
+
+    res.json({
+      success: true,
+      posts: postsWithReadTime,
+      user: req.user.username,
+      totalPosts: posts.length
+    });
+  } catch (error) {
+    console.error('Error fetching user posts:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching user posts',
+      error: error.message
+    });
+  }
+});
+
 // GET all posts - Public
 router.get('/', async (req, res) => {
   try {
@@ -34,7 +70,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET single post - Public
+// GET single post - Public (MUST be after specific routes)
 router.get('/:id', async (req, res) => {
   try {
     const postId = parseInt(req.params.id);
@@ -106,37 +142,12 @@ router.post('/:id/like', authenticateToken, async (req, res) => {
     res.json({ 
       likesCount: result.likesCount,
       action: result.action,
+      liked: result.liked,
       message: `Post ${result.action} successfully`
     });
   } catch (error) {
     console.error('Error toggling like:', error);
     res.status(500).json({ message: 'Error toggling like', error: error.message });
-  }
-});
-
-// Unlike post - Requires authentication (for compatibility)
-router.delete('/:id/like', authenticateToken, async (req, res) => {
-  try {
-    const postId = parseInt(req.params.id);
-    if (isNaN(postId)) {
-      return res.status(400).json({ message: 'Invalid post ID' });
-    }
-
-    const hasLiked = await PostLike.hasUserLiked(postId, req.user.id);
-    if (!hasLiked) {
-      return res.status(400).json({ message: 'You have not liked this post' });
-    }
-
-    await PostLike.removeLike(postId, req.user.id);
-    const likesCount = await PostLike.getLikesCount(postId);
-
-    res.json({ 
-      likesCount,
-      message: 'Post unliked successfully'
-    });
-  } catch (error) {
-    console.error('Error unliking post:', error);
-    res.status(500).json({ message: 'Error unliking post', error: error.message });
   }
 });
 
@@ -171,6 +182,8 @@ router.post('/', authenticateToken, async (req, res) => {
   try {
     const { title, content } = req.body;
     
+    console.log(`User ${req.user.id} creating new post`);
+    
     if (!title || !content) {
       return res.status(400).json({ message: 'Title and content are required' });
     }
@@ -190,10 +203,18 @@ router.post('/', authenticateToken, async (req, res) => {
       readTime: calculateReadTime(newPost.content)
     };
 
-    res.status(201).json(postWithMeta);
+    res.status(201).json({
+      success: true,
+      post: postWithMeta,
+      message: 'Post created successfully'
+    });
   } catch (error) {
     console.error('Error creating post:', error);
-    res.status(500).json({ message: 'Error creating post', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error creating post', 
+      error: error.message 
+    });
   }
 });
 
@@ -202,6 +223,8 @@ router.put('/:id', authenticateToken, authorizePostOwner, async (req, res) => {
   try {
     const postId = parseInt(req.params.id);
     const { title, content } = req.body;
+    
+    console.log(`User ${req.user.id} updating post ${postId}`);
     
     if (!title || !content) {
       return res.status(400).json({ message: 'Title and content are required' });
@@ -226,10 +249,18 @@ router.put('/:id', authenticateToken, authorizePostOwner, async (req, res) => {
       readTime: calculateReadTime(updatedPost.content)
     };
 
-    res.json(postWithMeta);
+    res.json({
+      success: true,
+      post: postWithMeta,
+      message: 'Post updated successfully'
+    });
   } catch (error) {
     console.error('Error updating post:', error);
-    res.status(500).json({ message: 'Error updating post', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error updating post', 
+      error: error.message 
+    });
   }
 });
 
@@ -237,32 +268,22 @@ router.put('/:id', authenticateToken, authorizePostOwner, async (req, res) => {
 router.delete('/:id', authenticateToken, authorizePostOwner, async (req, res) => {
   try {
     const postId = parseInt(req.params.id);
+    
+    console.log(`User ${req.user.id} deleting post ${postId}`);
+    
     await Post.delete(postId);
-    res.json({ message: 'Post deleted successfully' });
+    
+    res.json({ 
+      success: true,
+      message: 'Post deleted successfully' 
+    });
   } catch (error) {
     console.error('Error deleting post:', error);
-    res.status(500).json({ message: 'Error deleting post', error: error.message });
-  }
-});
-
-// GET user's own posts - Requires authentication
-router.get('/my/posts', authenticateToken, async (req, res) => {
-  try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const offset = (page - 1) * limit;
-
-    const posts = await Post.getByUserId(req.user.id, limit, offset);
-    
-    const postsWithReadTime = posts.map(post => ({
-      ...post,
-      readTime: calculateReadTime(post.content)
-    }));
-
-    res.json(postsWithReadTime);
-  } catch (error) {
-    console.error('Error fetching user posts:', error);
-    res.status(500).json({ message: 'Error fetching user posts', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error deleting post', 
+      error: error.message 
+    });
   }
 });
 
@@ -285,10 +306,17 @@ router.get('/:id/analytics', authenticateToken, async (req, res) => {
     }
 
     const analytics = await Post.getAnalytics(postId, req.user.id);
-    res.json(analytics);
+    res.json({
+      success: true,
+      analytics
+    });
   } catch (error) {
     console.error('Error fetching analytics:', error);
-    res.status(500).json({ message: 'Error fetching analytics', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error fetching analytics', 
+      error: error.message 
+    });
   }
 });
 

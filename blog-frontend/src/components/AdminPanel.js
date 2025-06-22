@@ -9,10 +9,9 @@ import QalamLogo from './QalamLogo';
 import axios from 'axios';
 import API_BASE_URL from '../config/api';
 
-
 const AdminPanel = () => {
   const { posts, loading, error, createPost, updatePost, deletePost, fetchPosts } = usePosts();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [formData, setFormData] = useState({ title: '', content: '' });
   const [editingId, setEditingId] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -25,6 +24,8 @@ const AdminPanel = () => {
   });
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [detailedPosts, setDetailedPosts] = useState([]);
+  const [userPosts, setUserPosts] = useState([]);
+  const [fetchError, setFetchError] = useState('');
 
   // Load draft from localStorage on component mount
   useEffect(() => {
@@ -44,11 +45,59 @@ const AdminPanel = () => {
     }
   }, [editingId]);
 
-  // Fetch detailed posts with real-time like/share counts
+  // Enhanced authentication check
+  const checkAuthentication = () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setFetchError('No authentication token found. Please log in again.');
+      return false;
+    }
+    return token;
+  };
+
+  // Filter posts by current user with enhanced ownership verification
+  const filterUserPosts = (allPosts) => {
+    if (!user) return [];
+    
+    console.log('Filtering posts for user:', user.username, 'ID:', user.id);
+    
+    const userSpecificPosts = allPosts.filter(post => {
+      const matchesUserId = post.user_id === user.id;
+      const matchesUsername = post.username === user.username;
+      const matchesAuthor = post.author === user.username;
+      
+      console.log(`Post ${post.id}: user_id=${post.user_id}, username=${post.username}, author=${post.author}`);
+      console.log(`Current user: id=${user.id}, username=${user.username}`);
+      console.log(`Matches: userId=${matchesUserId}, username=${matchesUsername}, author=${matchesAuthor}`);
+      
+      return matchesUserId || matchesUsername || matchesAuthor;
+    });
+    
+    console.log(`Filtered ${userSpecificPosts.length} posts for user ${user.username} from ${allPosts.length} total posts`);
+    return userSpecificPosts;
+  };
+
+  // Fetch detailed posts with real-time like/share counts and user filtering
   const fetchDetailedPosts = async () => {
     try {
+      setFetchError('');
+      
+      // First, get all posts
+      const allPosts = posts && posts.length > 0 ? posts : [];
+      
+      // Filter to only user's posts
+      const filteredPosts = filterUserPosts(allPosts);
+      
+      if (filteredPosts.length === 0) {
+        console.log('No posts found for current user');
+        setUserPosts([]);
+        setDetailedPosts([]);
+        return [];
+      }
+
+      // Fetch detailed data for user's posts only
       const detailedPostsData = await Promise.all(
-        posts.map(async (post) => {
+        filteredPosts.map(async (post) => {
           try {
             const response = await axios.get(`${API_BASE_URL}/api/posts/${post.id}`);
             return {
@@ -63,22 +112,94 @@ const AdminPanel = () => {
           }
         })
       );
+      
+      setUserPosts(filteredPosts);
       setDetailedPosts(detailedPostsData);
       return detailedPostsData;
     } catch (error) {
       console.error('Error fetching detailed posts:', error);
-      return posts;
+      setFetchError('Failed to fetch your posts. Please try again.');
+      
+      // Fallback to basic filtering
+      const filteredPosts = filterUserPosts(posts || []);
+      setUserPosts(filteredPosts);
+      setDetailedPosts(filteredPosts);
+      return filteredPosts;
     }
   };
 
-  // Calculate stats from detailed posts
+  // Fallback method: fetch all posts and filter by current user
+  const fetchAllPostsAndFilter = async () => {
+    try {
+      setFetchError('');
+      console.log('Using fallback method: fetching all posts and filtering for user:', user.username);
+      
+      const token = checkAuthentication();
+      if (!token) return;
+
+      const response = await axios.get(`${API_BASE_URL}/api/posts`);
+      console.log('All posts response:', response.data);
+      
+      const allPosts = Array.isArray(response.data) ? response.data : response.data.posts || [];
+      
+      // Filter posts by current user
+      const userSpecificPosts = filterUserPosts(allPosts);
+      
+      setUserPosts(userSpecificPosts);
+      setDetailedPosts(userSpecificPosts);
+      
+      return userSpecificPosts;
+    } catch (error) {
+      console.error('Error with fallback method:', error);
+      
+      if (error.response) {
+        const status = error.response.status;
+        const message = error.response.data?.message || error.message;
+        
+        switch (status) {
+          case 401:
+            setFetchError('Authentication failed. Please log in again.');
+            logout();
+            break;
+          case 403:
+            setFetchError('Access forbidden. You do not have permission.');
+            break;
+          case 404:
+            setFetchError('Posts not found. You may not have created any posts yet.');
+            setUserPosts([]);
+            setDetailedPosts([]);
+            break;
+          case 500:
+            setFetchError('Server error. Please try again later.');
+            break;
+          default:
+            setFetchError(`Error ${status}: ${message}`);
+        }
+      } else {
+        setFetchError('Network error. Please check your connection.');
+      }
+      
+      setUserPosts([]);
+      setDetailedPosts([]);
+      return [];
+    }
+  };
+
+  // Calculate stats from user's detailed posts only
   const calculateStats = async () => {
     try {
-      const detailedPostsData = await fetchDetailedPosts();
+      let detailedPostsData;
+      
+      // Try to get detailed posts, fallback if needed
+      if (posts && posts.length > 0) {
+        detailedPostsData = await fetchDetailedPosts();
+      } else {
+        detailedPostsData = await fetchAllPostsAndFilter();
+      }
 
       const totalPosts = detailedPostsData.length;
       const totalViews = detailedPostsData.reduce((sum, post) => sum + (post.views || 0), 0);
-      const totalLikes = detailedPostsData.reduce((sum, post) => sum + (post.likesCount || 0), 0);
+     const totalLikes = detailedPostsData.reduce((sum, post) => sum + (Number(post.likesCount) || 0), 0);
       const averageReadTime = totalPosts > 0 
         ? Math.ceil(detailedPostsData.reduce((sum, post) => sum + (post.readTime || 1), 0) / totalPosts)
         : 0;
@@ -90,14 +211,17 @@ const AdminPanel = () => {
         averageReadTime
       });
 
-      console.log('Stats updated:', { totalPosts, totalViews, totalLikes, averageReadTime });
+      console.log('Stats updated for user posts:', { totalPosts, totalViews, totalLikes, averageReadTime });
     } catch (error) {
       console.error('Error calculating stats:', error);
-      const totalPosts = posts.length;
-      const totalViews = posts.reduce((sum, post) => sum + (post.views || 0), 0);
-      const totalLikes = posts.reduce((sum, post) => sum + (post.likesCount || 0), 0);
+      
+      // Fallback stats calculation
+      const userFilteredPosts = filterUserPosts(posts || []);
+      const totalPosts = userFilteredPosts.length;
+      const totalViews = userFilteredPosts.reduce((sum, post) => sum + (post.views || 0), 0);
+      const totalLikes = userFilteredPosts.reduce((sum, post) => sum + (post.likesCount || 0), 0);
       const averageReadTime = totalPosts > 0 
-        ? Math.ceil(posts.reduce((sum, post) => sum + (post.readTime || 1), 0) / totalPosts)
+        ? Math.ceil(userFilteredPosts.reduce((sum, post) => sum + (post.readTime || 1), 0) / totalPosts)
         : 0;
 
       setStats({
@@ -109,7 +233,7 @@ const AdminPanel = () => {
     }
   };
 
-  // Manual refresh function
+  // Manual refresh function with user filtering
   const refreshStats = async () => {
     if (isRefreshing) return;
     
@@ -117,9 +241,10 @@ const AdminPanel = () => {
     try {
       await fetchPosts();
       setTimeout(() => calculateStats(), 500);
-      console.log('Stats refreshed successfully');
+      console.log('User stats refreshed successfully');
     } catch (error) {
       console.error('Error refreshing stats:', error);
+      setFetchError('Failed to refresh stats. Please try again.');
     } finally {
       setIsRefreshing(false);
     }
@@ -127,20 +252,20 @@ const AdminPanel = () => {
 
   // Calculate stats when posts change
   useEffect(() => {
-    if (posts.length > 0) {
+    if (user && posts.length >= 0) {
       calculateStats();
     }
-  }, [posts]);
+  }, [posts, user]);
 
   // Auto-refresh stats every 30 seconds
   useEffect(() => {
     const interval = setInterval(() => {
-      if (posts.length > 0) {
+      if (user && posts.length > 0) {
         calculateStats();
       }
     }, 30000);
     return () => clearInterval(interval);
-  }, [posts]);
+  }, [posts, user]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -148,6 +273,14 @@ const AdminPanel = () => {
     
     try {
       if (editingId) {
+        // Verify user owns this post before updating
+        const postToEdit = userPosts.find(post => post.id === editingId);
+        if (!postToEdit || (postToEdit.user_id !== user.id && postToEdit.username !== user.username)) {
+          alert('You can only edit your own posts');
+          setIsSubmitting(false);
+          return;
+        }
+        
         await updatePost(editingId, formData);
         setEditingId(null);
         setActiveTab('manage');
@@ -162,18 +295,32 @@ const AdminPanel = () => {
       }, 1000);
     } catch (error) {
       console.error('Error saving post:', error);
+      alert('Error saving post: ' + (error.response?.data?.message || error.message));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleEdit = (post) => {
+    // Enhanced ownership verification
+    if (!user || (post.user_id !== user.id && post.username !== user.username && post.author !== user.username)) {
+      alert('You can only edit your own posts');
+      return;
+    }
+    
     setFormData({ title: post.title, content: post.content });
     setEditingId(post.id);
     setActiveTab('create');
   };
 
   const handleDelete = async (id) => {
+    // Enhanced ownership verification
+    const postToDelete = userPosts.find(post => post.id === id);
+    if (!postToDelete || (postToDelete.user_id !== user.id && postToDelete.username !== user.username && postToDelete.author !== user.username)) {
+      alert('You can only delete your own posts');
+      return;
+    }
+
     if (window.confirm('Are you sure you want to delete this post? This action cannot be undone.')) {
       try {
         await deletePost(id);
@@ -183,6 +330,7 @@ const AdminPanel = () => {
         }, 1000);
       } catch (error) {
         console.error('Error deleting post:', error);
+        alert('Error deleting post: ' + (error.response?.data?.message || error.message));
       }
     }
   };
@@ -201,6 +349,23 @@ const AdminPanel = () => {
     return <ErrorMessage message={error} onRetry={fetchPosts} />;
   }
 
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 flex items-center justify-center">
+        <div className="text-center py-8 px-4">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Access Denied</h2>
+          <p className="text-gray-600 mb-6">Please log in to access the admin panel</p>
+          <button 
+            onClick={() => window.location.href = '/login'}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+          >
+            Go to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50">
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-8">
@@ -216,11 +381,32 @@ const AdminPanel = () => {
           </h1>
           <p className="text-base sm:text-lg lg:text-xl text-gray-600 px-4">
             Welcome back, <span className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">{user?.username}</span>! 
-            Create amazing content with our advanced editor
+            Manage your blog content
           </p>
         </div>
 
-        {/* Stats Cards */}
+        {/* Error Display */}
+        {fetchError && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <svg className="w-5 h-5 text-red-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-red-800 text-sm">{fetchError}</p>
+            </div>
+            <button 
+              onClick={() => {
+                setFetchError('');
+                refreshStats();
+              }}
+              className="mt-2 text-red-600 hover:text-red-800 text-sm font-medium"
+            >
+              Try Again
+            </button>
+          </div>
+        )}
+
+        {/* Stats Cards - Now showing only user's stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
           <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6 border-l-4 border-indigo-500 transform hover:scale-105 transition-all duration-300 hover:shadow-xl">
             <div className="flex items-center">
@@ -230,9 +416,9 @@ const AdminPanel = () => {
                 </svg>
               </div>
               <div className="ml-3 sm:ml-4 min-w-0">
-                <p className="text-xs sm:text-sm font-medium text-gray-600 truncate">Total Posts</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-600 truncate">Your Posts</p>
                 <p className="text-xl sm:text-2xl font-bold text-gray-900">{stats.totalPosts}</p>
-                <p className="text-xs text-green-500">📈 Active</p>
+                <p className="text-xs text-green-500">📈 Published</p>
               </div>
             </div>
           </div>
@@ -248,7 +434,7 @@ const AdminPanel = () => {
               <div className="ml-3 sm:ml-4 min-w-0">
                 <p className="text-xs sm:text-sm font-medium text-gray-600 truncate">Total Views</p>
                 <p className="text-xl sm:text-2xl font-bold text-gray-900">{stats.totalViews}</p>
-                <p className="text-xs text-green-500">👁️ Viewers</p>
+                <p className="text-xs text-green-500">👁️ Readers</p>
               </div>
             </div>
           </div>
@@ -262,13 +448,13 @@ const AdminPanel = () => {
               </div>
               <div className="ml-3 sm:ml-4 min-w-0">
                 <p className="text-xs sm:text-sm font-medium text-gray-600 truncate">Total Likes</p>
-                <p className="text-xl sm:text-2xl font-bold text-gray-900 text-red-600">{stats.totalLikes}</p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-900 text-red-600">{Number(stats.totalLikes).toLocaleString()}</p>
                 <button 
                   onClick={refreshStats}
                   disabled={isRefreshing}
                   className="text-xs text-gray-500 hover:text-gray-700 mt-1 disabled:opacity-50 transition-colors truncate"
                 >
-                  {isRefreshing ? '🔄 Refreshing...' : '🔄 Refresh Now'}
+                  {isRefreshing ? '🔄 Refreshing...' : '🔄 Refresh'}
                 </button>
               </div>
             </div>
@@ -314,7 +500,7 @@ const AdminPanel = () => {
                 }`}
               >
                 <span>📊</span>
-                <span>Manage Posts ({stats.totalPosts})</span>
+                <span>My Posts ({stats.totalPosts})</span>
               </button>
               <button
                 onClick={() => setActiveTab('analytics')}
@@ -344,19 +530,20 @@ const AdminPanel = () => {
 
             {activeTab === 'manage' && (
               <PostManager 
-                posts={detailedPosts.length > 0 ? detailedPosts : posts}
+                posts={detailedPosts.length > 0 ? detailedPosts : userPosts}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
                 setActiveTab={setActiveTab}
                 refreshStats={refreshStats}
                 isRefreshing={isRefreshing}
+                currentUser={user}
               />
             )}
 
             {activeTab === 'analytics' && (
               <AnalyticsPanel 
                 stats={stats}
-                posts={detailedPosts.length > 0 ? detailedPosts : posts}
+                posts={detailedPosts.length > 0 ? detailedPosts : userPosts}
                 refreshStats={refreshStats}
                 isRefreshing={isRefreshing}
               />
@@ -368,8 +555,8 @@ const AdminPanel = () => {
   );
 };
 
-// Post Manager Component - Responsive
-const PostManager = ({ posts, onEdit, onDelete, setActiveTab, refreshStats, isRefreshing }) => {
+// Post Manager Component - Enhanced with user ownership verification
+const PostManager = ({ posts, onEdit, onDelete, setActiveTab, refreshStats, isRefreshing, currentUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('date');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -424,7 +611,7 @@ const PostManager = ({ posts, onEdit, onDelete, setActiveTab, refreshStats, isRe
           <div className="relative">
             <input
               type="text"
-              placeholder="Search posts..."
+              placeholder="Search your posts..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full sm:w-auto pl-8 sm:pl-10 pr-3 sm:pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
@@ -502,22 +689,30 @@ const PostManager = ({ posts, onEdit, onDelete, setActiveTab, refreshStats, isRe
                   }
                 </p>
                 
+                {/* Instagram-style Analytics for Author */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 bg-gray-50 p-3 rounded-lg mb-3">
+                  <div className="text-center">
+                    <div className="text-lg sm:text-xl font-bold text-red-600">{post.likesCount || 0}</div>
+                    <div className="text-xs text-gray-600">Likes</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg sm:text-xl font-bold text-blue-600">{post.views || 0}</div>
+                    <div className="text-xs text-gray-600">Views</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg sm:text-xl font-bold text-green-600">{post.shares || 0}</div>
+                    <div className="text-xs text-gray-600">Shares</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg sm:text-xl font-bold text-purple-600">{post.uniqueLikes || 0}</div>
+                    <div className="text-xs text-gray-600">Unique</div>
+                  </div>
+                </div>
+                
                 <div className="grid grid-cols-2 sm:flex sm:items-center sm:space-x-6 gap-2 sm:gap-0 text-xs text-gray-500">
                   <span className="flex items-center space-x-1">
                     <span>👤</span>
                     <span className="truncate">By: {post.username}</span>
-                  </span>
-                  <span className="flex items-center space-x-1">
-                    <span>👁️</span>
-                    <span>{post.views || 0} views</span>
-                  </span>
-                  <span className="flex items-center space-x-1">
-                    <span>❤️</span>
-                    <span>{post.likesCount || 0} likes</span>
-                  </span>
-                  <span className="flex items-center space-x-1">
-                    <span>📤</span>
-                    <span>{post.shares || 0} shares</span>
                   </span>
                   <span className="flex items-center space-x-1">
                     <span>⏱️</span>
@@ -530,26 +725,33 @@ const PostManager = ({ posts, onEdit, onDelete, setActiveTab, refreshStats, isRe
                 </div>
               </div>
               
-              <div className="flex items-center space-x-2 sm:flex-col sm:space-x-0 sm:space-y-2 lg:flex-row lg:space-y-0 lg:space-x-2">
-                <button 
-                  onClick={() => onEdit(post)}
-                  className="flex-1 sm:flex-none inline-flex items-center justify-center bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors duration-200"
-                >
-                  <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                  Edit
-                </button>
-                <button 
-                  onClick={() => onDelete(post.id)}
-                  className="flex-1 sm:flex-none inline-flex items-center justify-center bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors duration-200"
-                >
-                  <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                  Delete
-                </button>
-              </div>
+              {/* Only show edit/delete buttons if user owns the post */}
+              {currentUser && (
+                post.user_id === currentUser.id || 
+                post.username === currentUser.username || 
+                post.author === currentUser.username
+              ) && (
+                <div className="flex items-center space-x-2 sm:flex-col sm:space-x-0 sm:space-y-2 lg:flex-row lg:space-y-0 lg:space-x-2">
+                  <button 
+                    onClick={() => onEdit(post)}
+                    className="flex-1 sm:flex-none inline-flex items-center justify-center bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors duration-200"
+                  >
+                    <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Edit
+                  </button>
+                  <button 
+                    onClick={() => onDelete(post.id)}
+                    className="flex-1 sm:flex-none inline-flex items-center justify-center bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors duration-200"
+                  >
+                    <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Delete
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -564,7 +766,7 @@ const PostManager = ({ posts, onEdit, onDelete, setActiveTab, refreshStats, isRe
   );
 };
 
-// Analytics Panel Component - Responsive
+// Analytics Panel Component - Enhanced for user-specific analytics
 const AnalyticsPanel = ({ stats, posts, refreshStats, isRefreshing }) => {
   const [timeRange, setTimeRange] = useState('7days');
 
@@ -580,7 +782,7 @@ const AnalyticsPanel = ({ stats, posts, refreshStats, isRefreshing }) => {
     <div className="space-y-4 sm:space-y-6">
       {/* Analytics Header */}
       <div className="flex flex-col space-y-3 sm:space-y-0 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">📈 Analytics Overview</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">📈 Your Analytics</h2>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
           <select
             value={timeRange}
@@ -632,7 +834,7 @@ const AnalyticsPanel = ({ stats, posts, refreshStats, isRefreshing }) => {
 
       {/* Top Performing Posts */}
       <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
-        <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">🏆 Top Performing Posts</h3>
+        <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">🏆 Your Top Performing Posts</h3>
         {topPosts.length > 0 ? (
           <div className="space-y-3 sm:space-y-4">
             {topPosts.map((post, index) => (

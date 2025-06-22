@@ -186,48 +186,6 @@ class PostLike {
       throw error;
     }
   }
-
-  // Get recent likes for a user (for activity feed)
-  static async getUserRecentLikes(userId, limit = 10) {
-    const { userId: validUserId } = this._validateParams(null, userId);
-    
-    try {
-      const [rows] = await pool.execute(`
-        SELECT 
-          pl.post_id,
-          pl.created_at as liked_at,
-          p.title,
-          p.slug,
-          u.username as author
-        FROM post_likes pl
-        JOIN posts p ON pl.post_id = p.id
-        JOIN users u ON p.user_id = u.id
-        WHERE pl.user_id = ? AND p.status = 'published'
-        ORDER BY pl.created_at DESC
-        LIMIT ?
-      `, [validUserId, parseInt(limit)]);
-      return rows;
-    } catch (error) {
-      console.error('Error getting user recent likes:', error);
-      throw error;
-    }
-  }
-
-  // Bulk unlike posts (for user account deletion)
-  static async removeAllUserLikes(userId) {
-    const { userId: validUserId } = this._validateParams(null, userId);
-    
-    try {
-      const [result] = await pool.execute(
-        'DELETE FROM post_likes WHERE user_id = ?',
-        [validUserId]
-      );
-      return result.affectedRows;
-    } catch (error) {
-      console.error('Error removing all user likes:', error);
-      throw error;
-    }
-  }
 }
 
 module.exports = PostLike;
