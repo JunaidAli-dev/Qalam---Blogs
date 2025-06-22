@@ -4,40 +4,58 @@
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
+    <meta name="theme-color" content="#8B5CF6" />
     <meta
       name="description"
-      content="Web site created using create-react-app"
+      content="Qalam - Modern Blogging Platform. Write, Share, Inspire with beautiful blog posts and rich content."
     />
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
-    <!--
-      manifest.json provides metadata used when your web app is installed on a
-      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
-    -->
-    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <!--
-      Notice the use of %PUBLIC_URL% in the tags above.
-      It will be replaced with the URL of the `public` folder during the build.
-      Only files inside the `public` folder can be referenced from the HTML.
+    <meta name="keywords" content="blog, writing, qalam, posts, articles, content" />
+    <meta name="author" content="Junaid Ali" />
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://qalam-blog.vercel.app/" />
+    <meta property="og:title" content="Qalam - Modern Blogging Platform" />
+    <meta property="og:description" content="Write, Share, Inspire with beautiful blog posts and rich content." />
+    <meta property="og:image" content="%PUBLIC_URL%/logo512.png" />
 
-      Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
-      work correctly both with client-side routing and a non-root public URL.
-      Learn how to configure a non-root public URL by running `npm run build`.
-    -->
-    <title>Qalam-Write, Share, Inspire</title>
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://qalam-blog.vercel.app/" />
+    <meta property="twitter:title" content="Qalam - Modern Blogging Platform" />
+    <meta property="twitter:description" content="Write, Share, Inspire with beautiful blog posts and rich content." />
+    <meta property="twitter:image" content="%PUBLIC_URL%/logo512.png" />
+    
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    
+    <!-- Preconnect to external domains for better performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <title>Qalam - Write, Share, Inspire</title>
   </head>
   <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <noscript>
+      <div style="display: flex; align-items: center; justify-content: center; height: 100vh; font-family: Arial, sans-serif; text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+        <div style="background: white; padding: 2rem; border-radius: 1rem; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
+          <h1 style="color: #333; margin-bottom: 1rem;">JavaScript Required</h1>
+          <p style="color: #666; margin-bottom: 1.5rem;">You need to enable JavaScript to run this app.</p>
+          <p style="color: #888; font-size: 0.9rem;">Please enable JavaScript in your browser settings and reload the page.</p>
+        </div>
+      </div>
+    </noscript>
     <div id="root"></div>
-    <!--
-      This HTML file is a template.
-      If you open it directly in the browser, you will see an empty page.
-
-      You can add webfonts, meta tags, or analytics to this file.
-      The build step will place the bundled scripts into the <body> tag.
-
-      To begin the development, run `npm start` or `yarn start`.
-      To create a production bundle, use `npm run build` or `yarn build`.
-    -->
+    
+    <!-- Fallback for older browsers -->
+    <script>
+      // Check if the browser supports ES6
+      try {
+        new Function("(a = 0) => a");
+      } catch (e) {
+        document.getElementById('root').innerHTML = 
+          '<div style="display: flex; align-items: center; justify-content: center; height: 100vh; font-family: Arial, sans-serif; text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"><div style="background: white; padding: 2rem; border-radius: 1rem; box-shadow: 0 10px 25px rgba(0,0,0,0.1);"><h1 style="color: #333; margin-bottom: 1rem;">Browser Not Supported</h1><p style="color: #666; margin-bottom: 1.5rem;">Your browser is too old to run this application.</p><p style="color: #888; font-size: 0.9rem;">Please update to a modern browser like Chrome, Firefox, Safari, or Edge.</p></div></div>';
+      }
+    </script>
   </body>
 </html>
