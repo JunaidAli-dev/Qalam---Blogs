@@ -42,7 +42,7 @@ const getPreviewContent = (content) => {
   return cleanText.length > 150 ? `${cleanText.substring(0, 150)}...` : cleanText;
 };
 
-// FIXED: Enhanced image extraction with comprehensive URL decoding
+// FIXED: Enhanced image extraction with CORS proxy support
 const getFirstImage = (content) => {
   if (!content) return null;
 
@@ -68,32 +68,30 @@ const getFirstImage = (content) => {
 
       console.log('Decoded image URL:', url);
 
-      // Additional validation and cleaning
-      if (url.startsWith('http') || url.startsWith('https') || url.startsWith('/') || url.startsWith('data:')) {
-        // Remove any trailing incomplete parameters
-        if (url.includes('&') && !url.match(/&[a-zA-Z0-9]+=.*/)) {
-          const parts = url.split('&');
-          url = parts[0] + '&' + parts.slice(1).filter(param => param.includes('=')).join('&');
-        }
-
-        // Validate URL structure
+      // FIXED: Check if external URL needs proxy
+      if (url.startsWith('http') || url.startsWith('https')) {
+        // Check if it's an external domain that might have CORS issues
         try {
-          new URL(url);
+          const urlObj = new URL(url);
+          const currentDomain = window.location.hostname;
+          
+          // If it's external domain, use proxy
+          if (urlObj.hostname !== currentDomain && !url.includes(currentDomain)) {
+            const proxyUrl = `${process.env.REACT_APP_API_URL || 'https://qalam-blogs-backend.vercel.app'}/api/proxy-image?url=${encodeURIComponent(url)}`;
+            console.log('Using proxy for external image:', proxyUrl);
+            return proxyUrl;
+          }
+          
           return url;
         } catch (urlError) {
           console.error('Invalid URL structure:', url);
-          // Try to fix common issues
-          if (url.includes('&amp;')) {
-            url = url.replace(/&amp;/g, '&');
-            try {
-              new URL(url);
-              return url;
-            } catch (e) {
-              console.error('Still invalid after fixing &amp;:', url);
-            }
-          }
           return null;
         }
+      }
+
+      // For relative URLs or data URLs
+      if (url.startsWith('/') || url.startsWith('data:')) {
+        return url;
       }
     }
 
@@ -102,7 +100,10 @@ const getFirstImage = (content) => {
     if (urlMatch && urlMatch[1]) {
       let url = urlMatch[1].replace(/&amp;/g, '&');
       console.log('Found image URL via pattern matching:', url);
-      return url;
+      
+      // Use proxy for external images
+      const proxyUrl = `${process.env.REACT_APP_API_URL || 'https://qalam-blogs-backend.vercel.app'}/api/proxy-image?url=${encodeURIComponent(url)}`;
+      return proxyUrl;
     }
 
     // Method 3: Look for base64 images
@@ -110,14 +111,6 @@ const getFirstImage = (content) => {
     if (base64Match && base64Match[0]) {
       console.log('Found base64 image');
       return base64Match[0];
-    }
-
-    // Method 4: Look for any image hosting service URLs
-    const imageHostMatch = content.match(/(https?:\/\/[^\s<>"]*(?:istockphoto|unsplash|pexels|pixabay|imgur|cloudinary)[^\s<>"]*)/i);
-    if (imageHostMatch && imageHostMatch[1]) {
-      let url = imageHostMatch[1].replace(/&amp;/g, '&');
-      console.log('Found image hosting URL:', url);
-      return url;
     }
 
     console.log('No image found in content');
@@ -205,28 +198,22 @@ const PostCard = ({ post }) => {
   const firstImage = getFirstImage(post.content);
   const previewText = getPreviewContent(post.content);
 
-  // FIXED: Enhanced image error handling
+  // FIXED: Enhanced image error handling with retry logic
   const handleImageError = (e) => {
     console.error('Image failed to load:', e.target.src);
-    console.error('Original URL might have encoding issues');
     setImageError(true);
     setImageLoaded(false);
 
-    // Try to fix common URL encoding issues
-    const originalSrc = e.target.src;
-    if (originalSrc.includes('%26')) {
-      const fixedSrc = originalSrc.replace(/%26/g, '&');
-      console.log('Trying fixed URL:', fixedSrc);
-      e.target.src = fixedSrc;
-      return;
-    }
-
-    // Try to fix &amp; issues
-    if (originalSrc.includes('&amp;')) {
-      const fixedSrc = originalSrc.replace(/&amp;/g, '&');
-      console.log('Trying fixed &amp; URL:', fixedSrc);
-      e.target.src = fixedSrc;
-      return;
+    // If it was a proxy URL that failed, try the original
+    const src = e.target.src;
+    if (src.includes('/api/proxy-image')) {
+      const urlParams = new URLSearchParams(src.split('?')[1]);
+      const originalUrl = urlParams.get('url');
+      if (originalUrl) {
+        console.log('Proxy failed, trying original URL:', originalUrl);
+        e.target.src = originalUrl;
+        return;
+      }
     }
   };
 
@@ -237,16 +224,10 @@ const PostCard = ({ post }) => {
     setImageLoaded(true);
   };
 
-  // Debug logging
-  React.useEffect(() => {
-    console.log('Post content preview:', post.content?.substring(0, 200));
-    console.log('Extracted image URL:', firstImage);
-  }, [post.content, firstImage]);
-
   return (
     <article className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100 group">
       <div className="flex flex-col md:flex-row min-h-[320px]">
-        {/* FIXED: Image Section with proper error handling and URL validation */}
+        {/* FIXED: Image Section with CORS-safe loading */}
         <div className="w-full h-48 md:w-80 md:h-80 flex-shrink-0 relative overflow-hidden bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100 m-3 rounded-xl">
           {firstImage && !imageError ? (
             <div className="w-full h-full relative">
@@ -258,13 +239,10 @@ const PostCard = ({ post }) => {
               <img
                 src={firstImage}
                 alt={post.title || 'Post image'}
-                className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-105 rounded-xl ${imageLoaded ? 'opacity-100' : 'opacity-0'
-                  }`}
+                className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-105 rounded-xl ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                 onLoad={handleImageLoad}
                 onError={handleImageError}
                 loading="lazy"
-                crossOrigin="anonymous"
-                referrerPolicy="no-referrer"
                 style={{
                   aspectRatio: '1/1',
                   objectFit: 'cover',
@@ -340,7 +318,7 @@ const PostCard = ({ post }) => {
             </p>
           </div>
 
-          {/* FIXED: Footer with stable positioning - ALWAYS at bottom */}
+          {/* Footer with stable positioning */}
           <div className="flex flex-col space-y-3 md:flex-row md:items-center md:justify-between md:space-y-0 pt-4 border-t border-gray-100 mt-auto">
             <Link
               to={`/post/${post.id}`}
@@ -352,7 +330,7 @@ const PostCard = ({ post }) => {
               </svg>
             </Link>
 
-            {/* FIXED: Like and Share buttons with proper styling and stable positioning */}
+            {/* Like and Share buttons */}
             <div className="flex items-center space-x-3 flex-shrink-0">
               <button
                 onClick={handleLike}
@@ -393,13 +371,6 @@ const PostCard = ({ post }) => {
 
 const PostList = () => {
   const { posts, loading, error, fetchPosts } = usePosts();
-
-  // Debug logging
-  React.useEffect(() => {
-    console.log('PostList - Posts:', posts);
-    console.log('PostList - Loading:', loading);
-    console.log('PostList - Error:', error);
-  }, [posts, loading, error]);
 
   if (loading) {
     return <LoadingSpinner text="Loading amazing posts..." />;
