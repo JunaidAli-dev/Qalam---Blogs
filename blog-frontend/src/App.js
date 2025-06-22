@@ -37,7 +37,7 @@ function App() {
             <div className="max-w-7xl mx-auto px-4 py-8">
               <div className="text-center">
                 <p className="text-gray-600">
-                  © 2025 My Blog. Built with React and Node.js.
+                  © 2025 Qalam. Built and Managed by Junaid Ali.
                 </p>
               </div>
             </div>

@@ -6,8 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import LoadingSpinner from './LoadingSpinner';
 import ErrorMessage from './ErrorMessage';
 import QalamLogo from './QalamLogo';
-import axios from 'axios';
-import API_BASE_URL from '../config/api';
+import { toggleLike, checkLikeStatus, sharePost } from '../services/api';
 
 // Helper function to format dates safely
 const formatDate = (dateString) => {
@@ -40,23 +39,69 @@ const getPreviewContent = (content) => {
     .replace(/\s+/g, ' ')
     .trim();
   
-  return cleanText.length > 80 ? `${cleanText.substring(0, 80)}...` : cleanText;
+  return cleanText.length > 150 ? `${cleanText.substring(0, 150)}...` : cleanText;
 };
 
-// Extract first image from content - Fixed version
+// FIXED: Enhanced image extraction with URL decoding and validation
 const getFirstImage = (content) => {
   if (!content) return null;
   
   try {
-    // Try to match img tags with src attribute
+    console.log('Extracting image from content:', content.substring(0, 200));
+    
+    // Method 1: Try to extract img tag with src attribute
     const imgMatch = content.match(/<img[^>]+src\s*=\s*["']([^"']+)["'][^>]*>/i);
     if (imgMatch && imgMatch[1]) {
-      // Validate URL
-      const url = imgMatch[1].trim();
-      if (url.startsWith('http') || url.startsWith('/') || url.startsWith('data:')) {
-        return url;
+      let url = imgMatch[1].trim();
+      console.log('Found raw image URL:', url);
+      
+      // FIXED: Decode HTML entities in URL
+      url = url
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&nbsp;/g, ' ');
+      
+      console.log('Decoded image URL:', url);
+      
+      // Validate and return URL
+      if (url.startsWith('http') || url.startsWith('https') || url.startsWith('/') || url.startsWith('data:')) {
+        // Additional validation for common image extensions
+        const imageExtensions = /\.(jpg|jpeg|png|gif|webp|svg|bmp|tiff)(\?.*)?$/i;
+        const isImageUrl = imageExtensions.test(url) || url.includes('image') || url.startsWith('data:image');
+        
+        if (isImageUrl) {
+          return url;
+        }
       }
     }
+    
+    // Method 2: Try to find any URL that looks like an image
+    const urlMatch = content.match(/(https?:\/\/[^\s<>"]+\.(?:jpg|jpeg|png|gif|webp|svg))/i);
+    if (urlMatch && urlMatch[1]) {
+      let url = urlMatch[1].replace(/&amp;/g, '&');
+      console.log('Found image URL via pattern matching:', url);
+      return url;
+    }
+    
+    // Method 3: Look for base64 images
+    const base64Match = content.match(/data:image\/[^;]+;base64,[^"'\s>]+/i);
+    if (base64Match && base64Match[0]) {
+      console.log('Found base64 image');
+      return base64Match[0];
+    }
+    
+    // Method 4: Look for any image hosting service URLs
+    const imageHostMatch = content.match(/(https?:\/\/[^\s<>"]*(?:istockphoto|unsplash|pexels|pixabay|imgur|cloudinary)[^\s<>"]*)/i);
+    if (imageHostMatch && imageHostMatch[1]) {
+      let url = imageHostMatch[1].replace(/&amp;/g, '&');
+      console.log('Found image hosting URL:', url);
+      return url;
+    }
+    
+    console.log('No image found in content');
     return null;
   } catch (error) {
     console.error('Error extracting image:', error);
@@ -74,24 +119,21 @@ const PostCard = ({ post }) => {
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
 
-  const checkLikeStatus = useCallback(async () => {
+  const checkLikeStatusCallback = useCallback(async () => {
     if (!isAuthenticated || !post.id) return;
     
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_BASE_URL}/api/posts/${post.id}/liked`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      setHasLiked(response.data.hasLiked);
-      setLikes(response.data.likesCount);
+      const response = await checkLikeStatus(post.id);
+      setHasLiked(response.hasLiked);
+      setLikes(response.likesCount);
     } catch (error) {
       console.error('Error checking like status:', error);
     }
   }, [isAuthenticated, post.id]);
 
   React.useEffect(() => {
-    checkLikeStatus();
-  }, [checkLikeStatus]);
+    checkLikeStatusCallback();
+  }, [checkLikeStatusCallback]);
 
   const handleLike = async () => {
     if (!isAuthenticated) {
@@ -103,24 +145,13 @@ const PostCard = ({ post }) => {
     
     setIsLiking(true);
     try {
-      const token = localStorage.getItem('token');
-      if (hasLiked) {
-        const response = await axios.delete(`${API_BASE_URL}/api/posts/${post.id}/like`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        setLikes(response.data.likesCount);
-        setHasLiked(false);
-      } else {
-        const response = await axios.post(`${API_BASE_URL}/api/posts/${post.id}/like`, {}, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        setLikes(response.data.likesCount);
-        setHasLiked(true);
-      }
+      const result = await toggleLike(post.id);
+      setLikes(result.likesCount);
+      setHasLiked(result.liked);
     } catch (error) {
       console.error('Error toggling like:', error);
       if (error.response?.status === 400) {
-        checkLikeStatus();
+        checkLikeStatusCallback();
       }
     } finally {
       setIsLiking(false);
@@ -132,8 +163,8 @@ const PostCard = ({ post }) => {
     
     setIsSharing(true);
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/posts/${post.id}/share`);
-      setShares(response.data.shares);
+      const response = await sharePost(post.id);
+      setShares(response.shares);
       
       const postUrl = `${window.location.origin}/post/${post.id}`;
       await navigator.clipboard.writeText(postUrl);
@@ -155,44 +186,76 @@ const PostCard = ({ post }) => {
   const firstImage = getFirstImage(post.content);
   const previewText = getPreviewContent(post.content);
 
-  // Handle image load error
-  const handleImageError = () => {
+  // FIXED: Enhanced image error handling
+  const handleImageError = (e) => {
+    console.error('Image failed to load:', e.target.src);
+    console.error('Original URL might have encoding issues');
     setImageError(true);
     setImageLoaded(false);
+    
+    // Try to fix common URL encoding issues
+    const originalSrc = e.target.src;
+    if (originalSrc.includes('%26')) {
+      const fixedSrc = originalSrc.replace(/%26/g, '&');
+      console.log('Trying fixed URL:', fixedSrc);
+      e.target.src = fixedSrc;
+      return;
+    }
   };
 
   // Handle image load success
   const handleImageLoad = () => {
+    console.log('Image loaded successfully');
     setImageError(false);
     setImageLoaded(true);
   };
 
+  // Debug logging
+  React.useEffect(() => {
+    console.log('Post content preview:', post.content?.substring(0, 200));
+    console.log('Extracted image URL:', firstImage);
+  }, [post.content, firstImage]);
+
   return (
     <article className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100 group">
-      <div className="flex flex-col md:flex-row min-h-[280px]">
-        {/* Image Section - Fixed height with proper margins */}
-        <div className="w-full h-48 md:w-64 md:h-auto flex-shrink-0 relative overflow-hidden bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100 m-3 rounded-xl">
+      <div className="flex flex-col md:flex-row min-h-[320px]">
+        {/* FIXED: Image Section with proper error handling and URL validation */}
+        <div className="w-full h-48 md:w-80 md:h-80 flex-shrink-0 relative overflow-hidden bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100 m-3 rounded-xl">
           {firstImage && !imageError ? (
-            <>
+            <div className="w-full h-full relative">
               {!imageLoaded && (
-                <div className="absolute inset-0 flex items-center justify-center">
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-xl">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
                 </div>
               )}
               <img 
                 src={firstImage} 
-                alt={post.title}
+                alt={post.title || 'Post image'}
                 className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-105 rounded-xl ${
                   imageLoaded ? 'opacity-100' : 'opacity-0'
                 }`}
                 onLoad={handleImageLoad}
                 onError={handleImageError}
                 loading="lazy"
+                crossOrigin="anonymous"
+                referrerPolicy="no-referrer"
+                style={{
+                  aspectRatio: '1/1',
+                  objectFit: 'cover',
+                  width: '100%',
+                  height: '100%'
+                }}
               />
-            </>
+            </div>
           ) : (
-            <div className="w-full h-full flex items-center justify-center rounded-xl">
+            <div className="w-full h-full flex flex-col items-center justify-center rounded-xl bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100">
               <QalamLogo width={48} height={48} />
+              {firstImage && imageError && (
+                <p className="text-xs text-gray-500 mt-2 text-center px-2">Image failed to load</p>
+              )}
+              {!firstImage && (
+                <p className="text-xs text-gray-500 mt-2 text-center px-2">No image available</p>
+              )}
             </div>
           )}
           
@@ -204,8 +267,8 @@ const PostCard = ({ post }) => {
           </div>
         </div>
         
-        {/* Content Section - Fixed layout */}
-        <div className="flex-1 p-4 md:p-6 flex flex-col min-h-0">
+        {/* Content Section with stable layout */}
+        <div className="flex-1 p-4 md:p-6 flex flex-col min-h-[320px]">
           <div className="flex-1 min-h-0">
             {/* Header */}
             <div className="flex flex-col space-y-2 md:flex-row md:items-start md:justify-between md:space-y-0 mb-3">
@@ -224,7 +287,7 @@ const PostCard = ({ post }) => {
               <div className="flex items-center space-x-4 text-sm text-gray-500 flex-shrink-0">
                 <div className="flex items-center space-x-1">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 616 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                   </svg>
                   <span className="font-medium">{post.views || 0}</span>
@@ -246,12 +309,12 @@ const PostCard = ({ post }) => {
             </h2>
             
             {/* Preview Text */}
-            <p className="text-gray-600 leading-relaxed text-sm line-clamp-2 mb-4 flex-1">
+            <p className="text-gray-600 leading-relaxed text-sm line-clamp-3 mb-4 flex-1">
               {previewText}
             </p>
           </div>
           
-          {/* Footer - Always visible at bottom */}
+          {/* FIXED: Footer with stable positioning - ALWAYS at bottom */}
           <div className="flex flex-col space-y-3 md:flex-row md:items-center md:justify-between md:space-y-0 pt-4 border-t border-gray-100 mt-auto">
             <Link 
               to={`/post/${post.id}`}
@@ -263,7 +326,8 @@ const PostCard = ({ post }) => {
               </svg>
             </Link>
             
-            <div className="flex items-center space-x-3">
+            {/* FIXED: Like and Share buttons with proper styling and stable positioning */}
+            <div className="flex items-center space-x-3 flex-shrink-0">
               <button
                 onClick={handleLike}
                 disabled={isLiking}
@@ -307,7 +371,6 @@ const PostList = () => {
 
   // Debug logging
   React.useEffect(() => {
-    console.log('PostList - API_BASE_URL:', API_BASE_URL);
     console.log('PostList - Posts:', posts);
     console.log('PostList - Loading:', loading);
     console.log('PostList - Error:', error);
@@ -323,7 +386,7 @@ const PostList = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50">
-      <div className="max-w-5xl mx-auto px-3 sm:px-4 lg:px-6 py-6 sm:py-8 lg:py-12">
+      <div className="max-w-6xl mx-auto px-3 sm:px-4 lg:px-6 py-6 sm:py-8 lg:py-12">
         {/* Hero Section */}
         <div className="text-center mb-8 sm:mb-12 lg:mb-16">
           <div className="flex justify-center mb-6">

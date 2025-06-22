@@ -92,24 +92,28 @@ export const deletePost = async (id) => {
   }
 };
 
-// Like functionality
-export const toggleLike = async (id) => {
+// FIXED: Like functionality - consistent API calls using axios defaults
+export const toggleLike = async (postId) => {
   try {
-    const response = await axios.post(`/api/posts/${id}/like`);
-    return response.data;
+    const response = await axios.post(`/api/posts/${postId}/like`);
+    return {
+      liked: response.data.liked,
+      likesCount: response.data.likesCount,
+      action: response.data.action
+    };
   } catch (error) {
     console.error('Error toggling like:', error);
     throw error;
   }
 };
 
-export const checkLikeStatus = async (id) => {
+export const checkLikeStatus = async (postId) => {
   try {
-    const response = await axios.get(`/api/posts/${id}/liked`);
+    const response = await axios.get(`/api/posts/${postId}/liked`);
     return response.data;
   } catch (error) {
     console.error('Error checking like status:', error);
-    throw error;
+    return { hasLiked: false, likesCount: 0 };
   }
 };
 

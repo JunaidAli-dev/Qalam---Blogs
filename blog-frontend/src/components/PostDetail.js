@@ -3,17 +3,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import QalamLogo from './QalamLogo';
-import axios from 'axios';
 import LoadingSpinner from './LoadingSpinner';
 import ErrorMessage from './ErrorMessage';
-import API_BASE_URL from '../config/api';
-
+import { fetchPost, toggleLike, checkLikeStatus, sharePost } from '../services/api';
 
 // Enhanced content renderer for TinyMCE HTML content
 const renderContent = (content) => {
   if (!content) return '';
-  
-  // The content from TinyMCE is already HTML, so we just need to ensure proper styling
   return content;
 };
 
@@ -64,17 +60,18 @@ const PostDetail = () => {
   const [isSharing, setIsSharing] = useState(false);
   const [heroImageError, setHeroImageError] = useState(false);
 
-  const fetchPost = useCallback(async () => {
+  const fetchPostData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await axios.get(`${API_BASE_URL}/api/posts/${id}`);
-      setPost(response.data);
+      
+      const postData = await fetchPost(id);
+      setPost(postData);
       
       if (isAuthenticated) {
         try {
-          const likeResponse = await axios.get(`${API_BASE_URL}/api/posts/${id}liked`);
-          setHasLiked(likeResponse.data.hasLiked);
+          const likeStatus = await checkLikeStatus(id);
+          setHasLiked(likeStatus.hasLiked);
         } catch (likeError) {
           console.error('Error checking like status:', likeError);
         }
@@ -87,8 +84,8 @@ const PostDetail = () => {
   }, [id, isAuthenticated]);
 
   useEffect(() => {
-    fetchPost();
-  }, [fetchPost]);
+    fetchPostData();
+  }, [fetchPostData]);
 
   const handleLike = async () => {
     if (!isAuthenticated) {
@@ -100,19 +97,13 @@ const PostDetail = () => {
     
     setIsLiking(true);
     try {
-      if (hasLiked) {
-        const response = await axios.delete(`${API_BASE_URL}/api/posts/${id}/like`);
-        setPost(prev => ({ ...prev, likesCount: response.data.likesCount }));
-        setHasLiked(false);
-      } else {
-        const response = await axios.post(`${API_BASE_URL}/api/posts/${id}/like`);
-        setPost(prev => ({ ...prev, likesCount: response.data.likesCount }));
-        setHasLiked(true);
-      }
+      const result = await toggleLike(id);
+      setPost(prev => ({ ...prev, likesCount: result.likesCount }));
+      setHasLiked(result.liked);
     } catch (error) {
       console.error('Error toggling like:', error);
       if (error.response?.status === 400) {
-        fetchPost();
+        fetchPostData();
       }
     } finally {
       setIsLiking(false);
@@ -124,8 +115,8 @@ const PostDetail = () => {
     
     setIsSharing(true);
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/posts/${id}/share`);
-      setPost(prev => ({ ...prev, shares: response.data.shares }));
+      const response = await sharePost(id);
+      setPost(prev => ({ ...prev, shares: response.shares }));
       
       const postUrl = `${window.location.origin}/post/${id}`;
       await navigator.clipboard.writeText(postUrl);
@@ -178,20 +169,26 @@ const PostDetail = () => {
         </nav>
         
         <article className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden border border-gray-100">
-          {/* Hero Section with Image */}
+          {/* Hero Section with Image - FIXED aspect ratio */}
           <div className="relative">
             {heroImage && !heroImageError ? (
-              <div className="h-48 sm:h-64 md:h-80 lg:h-96 overflow-hidden">
+              <div className="w-full aspect-[video] overflow-hidden">
                 <img 
                   src={heroImage}
                   alt={post.title}
                   className="w-full h-full object-cover"
                   onError={() => setHeroImageError(true)}
+                  width="1200"
+                  height="675"
+                  style={{
+                    aspectRatio: '16/9',
+                    objectFit: 'cover'
+                  }}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
               </div>
             ) : (
-              <div className="h-48 sm:h-64 md:h-80 lg:h-96 bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100 flex items-center justify-center">
+              <div className="w-full aspect-[22/9] bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100 flex items-center justify-center">
                 <QalamLogo width={80} height={80} className="sm:w-[120px] sm:h-[120px]" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent"></div>
               </div>
@@ -235,7 +232,7 @@ const PostDetail = () => {
                     </div>
                     <div className="flex items-center space-x-2">
                       <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 616 0z" />
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                       </svg>
                       <span className="font-medium text-sm sm:text-base">{post.views || 0} views</span>
@@ -259,20 +256,19 @@ const PostDetail = () => {
                 </div>
                 <div className="flex items-center space-x-2">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 616 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                   </svg>
                   <span className="text-sm font-medium">{post.views || 0} views</span>
                 </div>
               </div>
 
-              {/* Article Content */}
+              {/* FIXED: Article Content with proper image handling */}
               <div className="prose prose-sm sm:prose-base lg:prose-lg max-w-none">
                 <div 
                   dangerouslySetInnerHTML={{ __html: renderContent(post.content) }}
-                  className="text-gray-700 leading-relaxed text-base sm:text-lg break-words"
+                  className="text-gray-700 leading-relaxed text-base sm:text-lg break-words post-content"
                   style={{
-                    // Enhanced styling for TinyMCE content with responsive images
                     lineHeight: '1.8',
                     wordWrap: 'break-word',
                     overflowWrap: 'break-word'
@@ -282,8 +278,8 @@ const PostDetail = () => {
             </div>
           </div>
 
-          {/* Interaction Footer */}
-          <div className="bg-gradient-to-r from-gray-50 to-indigo-50 px-4 sm:px-6 md:px-8 lg:px-12 py-6 sm:py-8 border-t border-gray-200">
+          {/* FIXED: Interaction Footer with stable positioning - ALWAYS at bottom */}
+          <div className="bg-gradient-to-r from-gray-50 to-indigo-50 px-4 sm:px-6 md:px-8 lg:px-12 py-6 sm:py-8 border-t border-gray-200 mt-auto">
             <div className="max-w-4xl mx-auto">
               <div className="flex flex-col space-y-4 sm:space-y-0 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
@@ -332,18 +328,27 @@ const PostDetail = () => {
         </article>
       </div>
 
-      {/* Custom CSS for text shadow */}
+      {/* FIXED: Custom CSS for responsive images and preventing layout shift */}
       <style jsx>{`
         .text-shadow-lg {
           text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
         }
         
-        /* Responsive content styling */
-        .prose img {
+        /* FIXED: Prevent layout shift with proper image dimensions */
+        .post-content img {
           max-width: 100% !important;
           height: auto !important;
           border-radius: 8px;
           margin: 1rem auto;
+          display: block;
+          aspect-ratio: 16/9;
+          object-fit: cover;
+          width: 100%;
+        }
+        
+        /* Ensure images don't cause layout shift */
+        .post-content img[width][height] {
+          aspect-ratio: attr(width) / attr(height);
         }
         
         .prose table {
@@ -353,9 +358,31 @@ const PostDetail = () => {
           white-space: nowrap;
         }
         
+        /* FIXED: Ensure article layout is stable */
+        article {
+          display: flex;
+          flex-direction: column;
+          min-height: 100vh;
+        }
+        
+        /* FIXED: Content section takes available space */
+        .post-content {
+          flex: 1;
+        }
+        
+        /* FIXED: Footer stays at bottom */
+        .bg-gradient-to-r.from-gray-50.to-indigo-50 {
+          margin-top: auto;
+        }
+        
         @media (max-width: 640px) {
           .prose table {
             font-size: 0.875rem;
+          }
+          
+          .post-content img {
+            margin: 0.5rem auto;
+            aspect-ratio: 4/3;
           }
         }
       `}</style>
