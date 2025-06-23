@@ -41,7 +41,8 @@ function App() {
               <div className="max-w-7xl mx-auto px-4 py-8">
                 <div className="text-center">
                   <p className="text-gray-600">
-                    © 2025 Qalam. Built and Managed by Junaid Ali.
+                    © 2025 Qalam. Built and Managed by <a href="https://www.linkedin.com/in/junaid-ali-68801932b/" target='blank' className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 font-semibold transition-all duration-200 text-sm sm:text-base"
+>Junaid Ali.</a>
                   </p>
                 </div>
               </div>
