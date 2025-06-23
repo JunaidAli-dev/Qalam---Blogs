@@ -1,3 +1,8 @@
+<a href="https://github.com/JunaidAli-dev/Qalam---Blogs">Qalam---Blogs</a> © 2025 by <a href="https://github.com/JunaidAli-dev">Junaid Ali</a> is licensed under <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/">Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International</a><img src="https://mirrors.creativecommons.org/presskit/icons/cc.svg" style="max-width: 1em;max-height:1em;margin-left: .2em;"><img src="https://mirrors.creativecommons.org/presskit/icons/by.svg" style="max-width: 1em;max-height:1em;margin-left: .2em;"><img src="https://mirrors.creativecommons.org/presskit/icons/nc.svg" style="max-width: 1em;max-height:1em;margin-left: .2em;"><img src="https://mirrors.creativecommons.org/presskit/icons/nd.svg" style="max-width: 1em;max-height:1em;margin-left: .2em;">
+
+
+
+
 # Qalam - Modern Arabic-Inspired Blog Platform
 
 A beautiful, modern blogging platform with Arabic-inspired design and advanced features.
@@ -35,6 +40,7 @@ A beautiful, modern blogging platform with Arabic-inspired design and advanced f
 - MySQL (v8 or higher)
 - npm or yarn
 
-### Installation
+## License
 
-1. **Clone the repository**
+[Qalam---Blogs](https://github.com/JunaidAli-dev/Qalam---Blogs) © 2025 by [Junaid Ali](https://github.com/JunaidAli-dev) is licensed under [Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International](https://creativecommons.org/licenses/by-nc-nd/4.0/)
+
