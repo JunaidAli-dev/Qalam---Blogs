@@ -35,6 +35,7 @@ A beautiful, modern blogging platform with Arabic-inspired design and advanced f
 - MySQL (v8 or higher)
 - npm or yarn
 
-### Installation
+## License
 
-1. **Clone the repository**
+[Qalam---Blogs](https://github.com/JunaidAli-dev/Qalam-Blogs) © 2025 by [Junaid Ali](https://github.com/JunaidAli-dev) is licensed under [Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International](https://creativecommons.org/licenses/by-nc-nd/4.0/)
+
