@@ -37,5 +37,5 @@ A beautiful, modern blogging platform with Arabic-inspired design and advanced f
 
 ## License
 
-[Qalam---Blogs](https://github.com/JunaidAli-dev/Qalam-Blogs) © 2025 by [Junaid Ali](https://github.com/JunaidAli-dev) is licensed under [Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International](https://creativecommons.org/licenses/by-nc-nd/4.0/)
+[Qalam---Blogs](https://github.com/JunaidAli-dev/Qalam---Blogs) © 2025 by [Junaid Ali](https://github.com/JunaidAli-dev) is licensed under [Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International](https://creativecommons.org/licenses/by-nc-nd/4.0/)
 
